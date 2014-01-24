@@ -38,6 +38,7 @@ public:
     ~LIST_STACK_WITH_HEAD()
     {
         while(head->next!=head) remove(head->next);
+        delete head;
     }
     Node* search(int v)
     {
