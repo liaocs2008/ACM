@@ -28,7 +28,6 @@ public:
 };
 
 class LIST_STACK_WITH_HEAD{
-    /* Ñ­»·ÁŽ±í*/
 public:
     LIST_STACK_WITH_HEAD()
     {
