@@ -7,6 +7,9 @@
         So the case (...) / 0 can't happen.
    3. 1e-8 is to adjust -0.0000 to 0.0000.
    4. To pass poj, only choose G++ compiler and print in the format of "%.4f" rather than "%.4lf".
+   5. To prove, try to prove AO is perpendicular to BC. As a result O should be orthocenter.
+      Extends N to P to let CN equal to PN, and then connect FP. Try to prove angle CAB equal to angle CFP.
+      A little hint is that angle ACO plus angle FCN equals to 90 degrees.
 */
 
 #include <stdio.h>
