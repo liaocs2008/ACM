@@ -6,4 +6,4 @@ class Solution:
 
 if __name__ == "__main__":
   s = Solution()
-  print s.plusOne([1,2,34,56])
+  print s.plusOne([1,2,34,56]) # they didn't check this test. Interesting.
