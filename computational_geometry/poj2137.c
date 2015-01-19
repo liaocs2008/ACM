@@ -5,11 +5,11 @@
 #include <math.h>
 #define distance(x1, y1, x2, y2) sqrt((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2))
 int n = 0, c[101], x[101][41], y[101][41];
-float t[101][41];
+double t[101][41];
 int lookup(int i, int j)
 {
   int k = 0;
-  float d = 0;
+  double d = 0;
   if (t[i][j] >= 0) return t[i][j];
   else {
     t[i][j] = lookup(i - 1, 0) + distance(x[i - 1][0], y[i - 1][0], x[i][j], y[i][j]);
@@ -23,7 +23,7 @@ int lookup(int i, int j)
 int main()
 {
   int i = 0, j = 0, k = 0, s = 0;
-  float d = -1, tmp = 0;
+  double d = -1, tmp = 0;
   scanf("%d", &n);
   for (i = 0; i < n; i += 1) {
     scanf("%d", &c[i]);
