@@ -23,7 +23,7 @@ int lookup(int i, int j)
 int main()
 {
   int i = 0, j = 0, k = 0, s = 0;
-  float d = 0, tmp = 0;
+  float d = -1, tmp = 0;
   scanf("%d", &n);
   for (i = 0; i < n; i += 1) {
     scanf("%d", &c[i]);
@@ -33,11 +33,10 @@ int main()
     }
   }
   for (i = 0; i < c[0]; i += 1) t[0][i] = 0;
-  d = 1e8;
   for (j = 0; j < c[0]; j += 1) {
     for (i = 0; i < c[n - 1]; i += 1) {
       tmp = lookup(n - 1, i) + distance(x[n-1][i], y[n-1][i], x[0][j], y[0][j]);
-      if (d > tmp) d = tmp;
+      if ((d < 0) || (d > tmp)) d = tmp;
     }
   }
   printf("%d\n", (int)(100 * d));
