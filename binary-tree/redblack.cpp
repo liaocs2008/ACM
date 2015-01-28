@@ -60,14 +60,14 @@ void right_rotate(node *&root, node *y) // this functon may update root
   y->p = x;
 }
 
-void insert_fixup(node *root, node *z) // this functon won't update root
+void insert_fixup(node *&root, node *z) // this functon won't update root, but left_rotate or right_rotate may
 {
   node *y = nil; 
   // this must be interesting to notice:
   // if z is only node, i.e., the root, its parent is nil whose color is black
   // if z is a child of root, its parent's (root) color is black
   // so, here comes the conclusion, z must has 2 levels above itself
-  while (red == z->p->c) { // if parent is nil, it won't go into loop
+  while (red == z->p->c) {
     if (z->p == z->p->p->left) {
       y = z->p->right; // y is the uncle of z
       if (red == y->c) {
@@ -132,7 +132,7 @@ int main()
 {
   int i = 0;
   node a[10], *root = nil;
-  for (i = 0; i < 10; i += 1) {
+  for (i = 0; i < 9; i += 1) {
     a[i].key = i;
     insert(root, &a[i]);
   }
