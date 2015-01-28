@@ -10,7 +10,7 @@ struct node {
 };
 
 // sentinel
-node sentinel = {.key = 0, .p = NULL, .left = NULL, .right = NULL, .c = black};
+node sentinel = {.key = 0, .p = &sentinel, .left = &sentinel, .right = &sentinel, .c = black};
 node *nil = &sentinel;
 
 void inorder_walk(node *x)
@@ -26,7 +26,7 @@ void left_rotate(node *& root, node *x) // this functon may update root
 {
   node *y = x->right;
   // subtree belta
-  x->right = y->left; // how do you know if y is not nil
+  x->right = y->left;
   if (nil != y->left) y->left->p = x;
   // x's parent
   y->p = x->p;
@@ -45,7 +45,7 @@ void right_rotate(node *&root, node *y) // this functon may update root
 {
   node *x = y->left;
   // subtree belta
-  y->left = x->right; // how do you know if x is not nil
+  y->left = x->right;
   if (nil != x->right) x->right->p = y;
   // y's parent
   x->p = y->p;
@@ -63,6 +63,10 @@ void right_rotate(node *&root, node *y) // this functon may update root
 void insert_fixup(node *root, node *z) // this functon won't update root
 {
   node *y = nil; 
+  // this must be interesting to notice:
+  // if z is only node, i.e., the root, its parent is nil whose color is black
+  // if z is a child of root, its parent's (root) color is black
+  // so, here comes the conclusion, z must has 2 levels above itself
   while (red == z->p->c) { // if parent is nil, it won't go into loop
     if (z->p == z->p->p->left) {
       y = z->p->right; // y is the uncle of z
@@ -126,5 +130,13 @@ void insert(node *&root, node *z) // this function may update root
 
 int main()
 {
+  int i = 0;
+  node a[10], *root = nil;
+  for (i = 0; i < 10; i += 1) {
+    a[i].key = i;
+    insert(root, &a[i]);
+  }
+  inorder_walk(root);
+
   return 0;
 }
