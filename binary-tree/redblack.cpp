@@ -22,6 +22,25 @@ void inorder_walk(node *x)
   }
 }
 
+node* minimum(node *x)
+{
+  while (nil != x->left) x = x->left;
+  return x;
+}
+
+node* successor(node *x)
+{
+  if (nil != x->right) return minimum(x->right);
+  else {
+    node *y = x->p;
+    while ((nil != y) && (x == y->right)) {
+      x = y;
+      y = y->p;
+    }
+    return y;
+  }
+}
+
 void left_rotate(node *& root, node *x) // this functon may update root
 {
   node *y = x->right;
@@ -64,9 +83,9 @@ void insert_fixup(node *&root, node *z) // this functon won't update root, but l
 {
   node *y = nil; 
   // this must be interesting to notice:
-  // if z is only node, i.e., the root, its parent is nil whose color is black
+  // if z is the only node, i.e., the root, its parent is nil whose color is black
   // if z is a child of root, its parent's (root) color is black
-  // so, here comes the conclusion, z must has 2 levels above itself
+  // so, here comes the conclusion: if it goes into the loop, z must has 2 levels above itself
   while (red == z->p->c) {
     if (z->p == z->p->p->left) {
       y = z->p->right; // y is the uncle of z
@@ -126,6 +145,26 @@ void insert(node *&root, node *z) // this function may update root
   z->right = nil;
   z->c = red;
   insert_fixup(root, z);
+}
+
+void remove(node *& root, node *z) // this function may update root
+{
+  node *y = nil, *x = nil;
+  // y, either successor of z or z
+  if ((nil == z->left) || (nil == z->right)) y = z; // this case, just remove z between its parent and its children
+  else y = successor(z);
+  // x, a child of y 
+  if (nil != y->left) x = y->left;
+  else x = y->right;
+  x->p = y->p; // this may change sentinel's parent, handled in fixup function
+  // fix y's parent
+  if (nil == y->p) root = x;
+  else {
+    if (y == y->p->left) y->p->left = x;
+    else y->p->right = x;
+  }
+  if (y != z) z->key = y->key; // here, got no satellite data
+  if (black == y->c) remove_fixup();
 }
 
 int main()
