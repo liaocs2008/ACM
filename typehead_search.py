@@ -59,7 +59,7 @@ if __name__ == "__main__":
         records = [database[ids[i]] for i in strings_pos]
         #print records
         #print strings_pos
-        ids_pos = zip(*sorted(zip(records, strings_pos), key=lambda pair: (pair[0]['score'], pair[0]['time']), reverse=True))[1]
+        ids_pos = zip(*sorted(zip(records, strings_pos), key=lambda pair: (pair[0]['score'], pair[0]['time']), reverse=True))[1][:num]
         print (' '.join([ids[i] for i in ids_pos]))
       else: print ''
 
