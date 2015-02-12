@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+# This just passes tests, but not efficient
+
 import datetime
 from collections import defaultdict
 
