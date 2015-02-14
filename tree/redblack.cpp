@@ -264,7 +264,7 @@ int main()
     printf("\n");
   }
 
-  for (i = 0; i < 10; i += 1) {
+  for (i = 9; i > 0; i -= 1) {
     remove(root, &a[i]);
     printf("remove No.%d node, ", i);
     inorder_walk(root);
