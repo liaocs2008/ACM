@@ -4,8 +4,6 @@ from collections import defaultdict
 class Node(dict):
   def __init__(self):
     self.id = []
-  def is_leaf(self):
-    return len(self.id) > 0
  
 class Trie:
   def __init__(self):
@@ -30,7 +28,7 @@ class Trie:
       stack = [(pre, node)]
       while stack:
         tmp_pre, node = stack.pop()
-        if node.is_leaf():
+        if node.id:
           yield tmp_pre, node.id
         for ch, child in node.items():
           stack.append((tmp_pre + ch, child))
@@ -51,7 +49,7 @@ class Trie:
   def remove(self, string, id):
     try:
       node = self.search(string)
-      if node.is_leaf():
+      if node.id:
         node.id.remove(id)
     except KeyError:
       return
