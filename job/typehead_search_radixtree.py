@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 import datetime
 from collections import defaultdict
-
-class Trie:
-
-  class Node(dict):
-    def is_leaf(self):
-      return hasattr(self, 'id')
-  
+class Node(dict):
   def __init__(self):
-    self.root = self.Node()
+    self.id = []
+  def is_leaf(self):
+    return len(self.id) > 0
+ 
+class Trie:
+  def __init__(self):
+    self.root = Node()
 
   def search(self, string, new=False):
     node = self.root
@@ -17,7 +17,7 @@ class Trie:
       if ch in node.keys():
         node = node[ch]
       elif new:
-        new_node = self.Node()
+        new_node = Node()
         node[ch]=  new_node
         node = new_node
       else : 
@@ -45,22 +45,22 @@ class Trie:
 
   def insert(self, string, id):
     node = self.search(string, new=True)
-    if node.is_leaf():
-      node.id.append(id)
-    else :
-      node.id = [id]
+    node.id += [id]
+    node.leaf_label = True
 
   def remove(self, string, id):
     try:
       node = self.search(string)
       if node.is_leaf():
         node.id.remove(id)
-        if not node.id : del node.id
     except KeyError:
       return
 
 if __name__ == "__main__":
   tree = Trie()
+  #tree.insert("ab", "12")
+  #tree.insert("ac", "12")
+  #tree.insert("ac", "12")
   N = input()
   database = {}
   for i in xrange(0, N):
