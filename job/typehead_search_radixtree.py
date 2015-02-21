@@ -38,10 +38,10 @@ class Trie:
       yield '', []
 
   def prefix(self, pre=''):
-    s = set()
+    l = []
     for string, ids in self.list(pre):
-      s = s.union(ids)
-    return s
+      l += ids
+    return set(l)
 
   def insert(self, string, id):
     node = self.search(string, new=True)
