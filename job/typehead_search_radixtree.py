@@ -1,6 +1,10 @@
 #!/usr/bin/env python
+# This failed the two largest data set, timeout
+# http://codereview.stackexchange.com/questions/24602/readability-and-performance-of-my-trie-implementation
+
 import datetime
 from collections import defaultdict
+
 class Node(dict):
   def __init__(self):
     self.id = []
