@@ -240,7 +240,7 @@ void remove(node *& root, node *z) // this function may update root
   // x, a child of y 
   if (nil != y->left) x = y->left;
   else x = y->right;
-  x->p = y->p; // WARNING: this may change sentinel's parent, handled in fixup function
+  if (nil != x) x->p = y->p; // WARNING: this may change sentinel's parent, handled in fixup function
   // fix y's parent
   if (nil == y->p) root = x;
   else {
