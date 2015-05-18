@@ -10,6 +10,7 @@ class WaterNode : public Node {
       bottles_[0] = bottles[0];
       bottles_[1] = bottles[1];
       //unique_hash_ = bottles[0] + bottles[1];
+      unique_hash_ = 0;
       unique_hash_ ^= bottles[0] + 0x9e3779b9 + (unique_hash_ << 6) + (unique_hash_ >> 2);
       unique_hash_ ^= bottles[1] + 0x9e3779b9 + (unique_hash_ << 6) + (unique_hash_ >> 2);
     }
@@ -17,8 +18,9 @@ class WaterNode : public Node {
 
     void show()
     {
-      cout << "(" << bottles_[0] << "," << bottles_[1] << ")" << ", hash=" << unique_hash_
-           << ", depth=" << depth_  << ", c_cost=" << current_cost_ << ", f_cost=" << future_cost_ << endl;
+      cout << "(" << bottles_[0] << "," << bottles_[1] << ")"
+           << ", depth=" << depth_  << ", c_cost=" << current_cost_ << ", f_cost=" << future_cost_
+           << ", f=" << f << endl;
     }
 
     bool equal(const node_ptr& obj)
