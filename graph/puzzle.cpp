@@ -77,7 +77,7 @@ class Puzzle : public Problem {
       if (row > 0) { // move above block down
         int new_blank = (row - 1) * width_ + col;
         vector<int> board(dynamic_pointer_cast<PuzzleNode>(u)->board_.begin(),
-                          dynamic_pointer_cast<PuzzleNode>(u)->board_.end());
+            dynamic_pointer_cast<PuzzleNode>(u)->board_.end());
         board[new_blank] = dynamic_pointer_cast<PuzzleNode>(u)->board_[old_blank];
         board[old_blank] = dynamic_pointer_cast<PuzzleNode>(u)->board_[new_blank];
 
@@ -91,7 +91,7 @@ class Puzzle : public Problem {
       if (col > 0) { // move left block right
         int new_blank = row * width_ + (col - 1);
         vector<int> board(dynamic_pointer_cast<PuzzleNode>(u)->board_.begin(),
-                          dynamic_pointer_cast<PuzzleNode>(u)->board_.end());
+            dynamic_pointer_cast<PuzzleNode>(u)->board_.end());
         board[new_blank] = dynamic_pointer_cast<PuzzleNode>(u)->board_[old_blank];
         board[old_blank] = dynamic_pointer_cast<PuzzleNode>(u)->board_[new_blank];
 
@@ -106,7 +106,7 @@ class Puzzle : public Problem {
       if (row < height_ - 1) { // move below block up
         int new_blank = (row + 1) * width_ + col;
         vector<int> board(dynamic_pointer_cast<PuzzleNode>(u)->board_.begin(),
-                          dynamic_pointer_cast<PuzzleNode>(u)->board_.end());
+            dynamic_pointer_cast<PuzzleNode>(u)->board_.end());
         board[new_blank] = dynamic_pointer_cast<PuzzleNode>(u)->board_[old_blank];
         board[old_blank] = dynamic_pointer_cast<PuzzleNode>(u)->board_[new_blank];
 
@@ -121,7 +121,7 @@ class Puzzle : public Problem {
       if (col < width_ - 1) { // move right block left
         int new_blank = row * width_ + (col + 1);
         vector<int> board(dynamic_pointer_cast<PuzzleNode>(u)->board_.begin(),
-                          dynamic_pointer_cast<PuzzleNode>(u)->board_.end());
+            dynamic_pointer_cast<PuzzleNode>(u)->board_.end());
         board[new_blank] = dynamic_pointer_cast<PuzzleNode>(u)->board_[old_blank];
         board[old_blank] = dynamic_pointer_cast<PuzzleNode>(u)->board_[new_blank];
 
@@ -140,13 +140,7 @@ class Puzzle : public Problem {
       for (size_t i = 0; i < dynamic_pointer_cast<PuzzleNode>(goal_)->board_.size(); ++i) {
         if (dynamic_pointer_cast<PuzzleNode>(goal_)->board_[i] !=
             dynamic_pointer_cast<PuzzleNode>(s)->board_[i])
-            cost += 1;
-        /*int p = find(dynamic_pointer_cast<PuzzleNode>(s)->board_.begin(),
-             dynamic_pointer_cast<PuzzleNode>(s)->board_.end(),
-             dynamic_pointer_cast<PuzzleNode>(goal_)->board_[i])
-             - dynamic_pointer_cast<PuzzleNode>(s)->board_.begin();
-             */
-        //cost += abs(p/width_ - i/width_) + abs(p%width_ - i%width_);
+          cost += 1;
       }
       return cost;
     }
@@ -173,9 +167,9 @@ int main()
   e->show();
   for (auto& i : *m) i->show();
 
-        cout   << "|Closed|=" << e->closed_size_
-               << ", max(open)=" << e->max_open_
-               << ", depth=" << m->size()-1
-               << ", max(depth)=" << e->max_depth_ << endl;
+  cout << "|Closed|=" << e->closed_size_
+    << ", max(open)=" << e->max_open_
+    << ", depth=" << m->size()-1
+    << ", max(depth)=" << e->max_depth_ << endl;
   return 0;
 }

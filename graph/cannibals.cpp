@@ -121,10 +121,10 @@ class Cannibal : public Problem {
     {
       size_t cost = 0;
       cost  = abs(dynamic_pointer_cast<CannibalNode>(goal_)->side1_[0] -
-                  dynamic_pointer_cast<CannibalNode>(s)->side1_[0])
-              +
-              abs(dynamic_pointer_cast<CannibalNode>(goal_)->side1_[1] -
-                  dynamic_pointer_cast<CannibalNode>(s)->side1_[1]);
+          dynamic_pointer_cast<CannibalNode>(s)->side1_[0])
+        +
+        abs(dynamic_pointer_cast<CannibalNode>(goal_)->side1_[1] -
+            dynamic_pointer_cast<CannibalNode>(s)->side1_[1]);
       return cost;
     }
 
@@ -145,9 +145,9 @@ int main()
   e->search(p, m);
   e->show();
   for (auto& i : *m) i->show();
-cout   << "|Closed|=" << e->closed_size_
-               << ", max(open)=" << e->max_open_
-               << ", depth=" << m->size()-1
-               << ", max(depth)=" << e->max_depth_ << endl;
+  cout << "|Closed|=" << e->closed_size_
+    << ", max(open)=" << e->max_open_
+    << ", depth=" << m->size()-1
+    << ", max(depth)=" << e->max_depth_ << endl;
   return 0;
 }
