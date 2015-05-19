@@ -2,8 +2,12 @@
 
 #include <vector>
 #include <algorithm>
+#include <iomanip>
+#include <future>
+#include <chrono>
 
-//#define DEBUG_PRINT
+
+#define N 3 // side length of the board
 
 class PuzzleNode : public Node {
   public:
@@ -13,6 +17,7 @@ class PuzzleNode : public Node {
       board_.resize(board.size());
       copy(board.begin(), board.end(), board_.begin());
 
+      // define hash function
       unique_hash_ = 0;
       for(auto& i : board_) {
         unique_hash_ ^= i + 0x9e3779b9 + (unique_hash_ << 6) + (unique_hash_ >> 2);
@@ -22,8 +27,11 @@ class PuzzleNode : public Node {
 
     void show()
     {
-      copy(board_.begin(), board_.end(), std::ostream_iterator<int>(std::cout, " "));
-      cout << ", " << depth_  << ", " << current_cost_ << ", " << future_cost_ << endl;
+      for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < N; ++j) cout << std::setw(3) << board_[i*N + j] << ", ";
+        cout << endl;
+      }
+      cout << "(depth=" << depth_  << ", g(u)=" << current_cost_ << ", h(u)=" << future_cost_ << ")" << endl;
     }
 
     int blank_; // position for the blank
@@ -41,7 +49,7 @@ class Puzzle : public Problem {
   public:
     Puzzle(const string& name, const vector<int>& init, const vector<int>& goal, int width, int height)
     {
-      int p = 0;
+      int p = 0; //  position of blank, by default 0 stands for blank
 
       p = find(init.begin(), init.end(), 0) - init.begin();
       init_ = make_shared<PuzzleNode>(p, init);
@@ -57,10 +65,10 @@ class Puzzle : public Problem {
     }
     ~Puzzle() {}
 
+    // relate new node to its parent node
     inline void insert_new_node(const node_ptr&u, node_ptr& new_node, shared_ptr<node_set>& l)
     {
       new_node->parent_ = u;
-      //new_node->parent_move_ = make_shared<PuzzleMove>(new_blank);
       new_node->parent_move_ = make_shared<PuzzleMove>(dynamic_pointer_cast<PuzzleNode>(new_node)->blank_);
       new_node->depth_ = u->depth_ + 1;
       new_node->current_cost_ = u->current_cost_ + new_node->parent_move_->cost();
@@ -83,9 +91,6 @@ class Puzzle : public Problem {
 
         node_ptr new_node = make_shared<PuzzleNode>(new_blank, board);
         insert_new_node(u, new_node, l);
-#ifdef DEBUG_PRINT
-        cout<< "new_node "; new_node->show();
-#endif
       }
 
       if (col > 0) { // move left block right
@@ -97,10 +102,6 @@ class Puzzle : public Problem {
 
         node_ptr new_node = make_shared<PuzzleNode>(new_blank, board);
         insert_new_node(u, new_node, l);
-
-#ifdef DEBUG_PRINT
-        cout<< "new_node "; new_node->show();
-#endif
       }
 
       if (row < height_ - 1) { // move below block up
@@ -112,10 +113,6 @@ class Puzzle : public Problem {
 
         node_ptr new_node = make_shared<PuzzleNode>(new_blank, board);
         insert_new_node(u, new_node, l);
-
-#ifdef DEBUG_PRINT
-        cout<< "new_node "; new_node->show();
-#endif
       }
 
       if (col < width_ - 1) { // move right block left
@@ -127,21 +124,28 @@ class Puzzle : public Problem {
 
         node_ptr new_node = make_shared<PuzzleNode>(new_blank, board);
         insert_new_node(u, new_node, l);
-
-#ifdef DEBUG_PRINT
-        cout<< "new_node "; new_node->show();
-#endif
       }
     }
 
     size_t get_future_cost(const node_ptr& s)
     {
       size_t cost = 0;
+      /*
+      // misplaced blocks
       for (size_t i = 0; i < dynamic_pointer_cast<PuzzleNode>(goal_)->board_.size(); ++i) {
         if (dynamic_pointer_cast<PuzzleNode>(goal_)->board_[i] !=
             dynamic_pointer_cast<PuzzleNode>(s)->board_[i])
           cost += 1;
       }
+      */
+
+      // manhattan distance
+      for (size_t i = 0; i < dynamic_pointer_cast<PuzzleNode>(goal_)->board_.size(); ++i) {
+        cost += abs(dynamic_pointer_cast<PuzzleNode>(goal_)->board_[i] -
+                    dynamic_pointer_cast<PuzzleNode>(s)->board_[i]);
+      }
+
+
       return cost;
     }
 
@@ -152,24 +156,41 @@ class Puzzle : public Problem {
 
 int main()
 {
-  int init[] = {0, 1, 2, 3, 4, 5, 6, 7, 8};
-  //int goal[] = {1, 2, 5, 3, 4, 8, 6, 0, 7};
-  int goal[] = {1, 2, 5, 4, 0, 8, 3, 6, 7};
+  //int init[] = {8, 1, 3, 4, 0, 2, 7, 6, 5};
+  //int goal[] = {1, 2, 3, 4, 5, 6, 7, 8, 0};
+  int init[] = {8,6,7,2,5,4,3,0,1};
+  int goal[] = {6,4,7,8,5,0,3,2,1};
+
 
   shared_ptr<Problem> p = make_shared<Puzzle>("9-puzzle",
       vector<int>(init, init+sizeof(init)/sizeof(init[0])),
       vector<int>(goal, goal+sizeof(goal)/sizeof(goal[0])),
-      3, 3);
+      N, N);
 
-  shared_ptr<Engine> e = make_shared<RBFS>();
+  shared_ptr<Engine> e = make_shared<A_Star>();
   shared_ptr<node_list> m = make_shared<node_list>();
-  e->search(p, m);
-  e->show();
-  for (auto& i : *m) i->show();
 
-  cout << "|Closed|=" << e->closed_size_
+  std::chrono::high_resolution_clock::time_point t0 = std::chrono::high_resolution_clock::now();
+
+  auto fut = std::async(std::launch::async, bind(&Engine::search, e, p, m));;
+  std::chrono::milliseconds span (1000); // set time limit
+
+  std::future_status status = fut.wait_for(span);
+  if (status == std::future_status::timeout) {
+    std::cout << "timeout\n";
+  } else if (status == std::future_status::ready) {
+    std::cout << "solution found!\n";
+    // print solution, from init to goal
+    e->show();
+    for (auto& i : *m) i->show();
+  }
+
+  std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+  std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
+  cout << "time=" << ms.count() << "ms"
+    << ", |Closed|=" << e->closed_size_
     << ", max(open)=" << e->max_open_
-    << ", depth=" << m->size()-1
+    << ", depth=" << (m->size() > 0 ? m->size()-1 : m->size())
     << ", max(depth)=" << e->max_depth_ << endl;
-  return 0;
+  exit(0); // kill the thread launched by async()
 }

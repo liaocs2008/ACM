@@ -13,6 +13,8 @@ class Node;
 class Problem;
 class State;
 
+
+// use smart pointer here
 typedef shared_ptr<Node> node_ptr;
 typedef shared_ptr<Move> move_ptr;
 typedef shared_ptr<Problem> problem_ptr;
@@ -24,6 +26,7 @@ class Move {
   public:
     Move() {}
     virtual ~Move() {}
+    // problem can define cost of each move
     virtual int cost() { return 1; }
 };
 
@@ -34,12 +37,10 @@ class Node : public std::enable_shared_from_this<Node> {
       parent_move_ = nullptr;
       parent_ = nullptr;
       depth_ = unique_hash_ = 0;
-      current_cost_ = future_cost_ = 0;
+      current_cost_ = future_cost_ = f = 0;
     }
     virtual ~Node() {}
-    virtual void show() = 0;
-
-    bool operator == (const Node& rhs) {return this->unique_hash_ == rhs.unique_hash_;}
+    virtual void show() = 0; // you must define how to show a node
 
     size_t depth_;
     size_t current_cost_; // g(u)
@@ -97,9 +98,11 @@ class Engine {
   public:
     Engine() {max_open_ = max_depth_ = closed_size_ = 0;}
     virtual void show() = 0;
+    // different search algorithms must have their own way of maintaining priority queue
     virtual void extract(node_ptr& u, const shared_ptr<node_list>& open) = 0;
     virtual void insert(const node_ptr& u, shared_ptr<node_list>& closed) = 0;
 
+    // by default, throw away any node already explored or generated
     virtual void improve(const node_ptr& s,
                          const node_ptr& u,
                          shared_ptr<node_list>& open,
@@ -141,7 +144,8 @@ class Engine {
       do {
         max_open_ = max(open->size(), max_open_);
 
-        //cout << "|open|=" << open->size() << endl; for (auto& i : *open) i->show(); cout <<endl;
+        // for debug
+        // cout << "|open|=" << open->size() << endl; for (auto& i : *open) i->show(); cout <<endl;
         extract(u, open); //cout << "extract: "; u->show();
         insert(u, closed);
 
@@ -152,6 +156,7 @@ class Engine {
           closed_size_ = closed->size();
           return;
         } else {
+          // improve successors, actually this function can be inserted into insert()
           shared_ptr<node_set> successors = make_shared<node_set>();
           p->get_successor(u, successors);
           for (auto& s : (*successors)) {
@@ -425,6 +430,8 @@ class SMA_Star : public A_Star {
 
 class RBFS : public DFS {
   public:
+    // don't use closed list to cut off
+    // because RBFS will jump many times between the best and second best branches
     shared_ptr<node_list> closed_;
 
     RBFS() : DFS() {closed_ = make_shared<node_list>();}
@@ -455,7 +462,7 @@ class RBFS : public DFS {
 
     void aux(const problem_ptr&p, node_ptr& u, const size_t& upper_bound, shared_ptr<node_list>& path)
     {
-      cout << "visited : upperbound=" << upper_bound << ", "; u->show();
+      //cout << "visited : upperbound=" << upper_bound << ", "; u->show();
       max_depth_ = max(u->depth_, max_depth_);
       // check if solution found
       if ((false == path->empty()) || (true == p->goal_test(u))) {
@@ -463,6 +470,7 @@ class RBFS : public DFS {
         return;
       }
       else {
+        // check if already in closed list
         bool duplicate = false;
         for (auto& i : *closed_) {
           if (i->unique_hash_ == u->unique_hash_) {
@@ -485,7 +493,7 @@ class RBFS : public DFS {
       shared_ptr<node_list> l = make_shared<node_list>();
       for (auto& s : (*successors)) {
         s->f = s->current_cost_ + s->future_cost_;
-
+        // for each group there can be duplicate successors
         bool duplicate = false;
         for (auto& tmp : (*l)) {
           if ((s != tmp) && (s->unique_hash_ == tmp->unique_hash_)) {
@@ -502,9 +510,10 @@ class RBFS : public DFS {
 
       size_t new_bound = 0;
       while (true) {
-        cout << "current layer:" << u->depth_ << endl;
-        for (auto &t : *l) t->show();
+        //cout << "current layer:" << u->depth_ << endl;
+        //for (auto &t : *l) t->show();
 
+        // front is the node with the least cost
         auto lowest = l->front();
         l->pop_front();
 
@@ -522,7 +531,9 @@ class RBFS : public DFS {
         else {
           new_bound = min(lowest->f, upper_bound);
         }
+
         aux(p, lowest, new_bound, path);
+
         if (false == path->empty()) return; // solution found
         else {
           // resort because lowest's f value may be updated

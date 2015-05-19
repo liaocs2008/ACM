@@ -2,6 +2,8 @@
 
 #include <vector>
 #include <algorithm>
+#include <future>
+#include <chrono>
 
 class WaterNode : public Node {
   public:
@@ -9,7 +11,8 @@ class WaterNode : public Node {
     {
       bottles_[0] = bottles[0];
       bottles_[1] = bottles[1];
-      //unique_hash_ = bottles[0] + bottles[1];
+
+      // define hash computation
       unique_hash_ = 0;
       unique_hash_ ^= bottles[0] + 0x9e3779b9 + (unique_hash_ << 6) + (unique_hash_ >> 2);
       unique_hash_ ^= bottles[1] + 0x9e3779b9 + (unique_hash_ << 6) + (unique_hash_ >> 2);
@@ -19,15 +22,9 @@ class WaterNode : public Node {
     void show()
     {
       cout << "(" << bottles_[0] << "," << bottles_[1] << ")"
-           << ", depth=" << depth_  << ", c_cost=" << current_cost_ << ", f_cost=" << future_cost_
-           << ", f=" << f << endl;
+           << ", depth=" << depth_  << ", g=" << current_cost_ << ", h=" << future_cost_ << endl;
     }
 
-    bool equal(const node_ptr& obj)
-    {
-      return (dynamic_pointer_cast<WaterNode>(obj)->bottles_[0] == bottles_[0])
-          && (dynamic_pointer_cast<WaterNode>(obj)->bottles_[1] == bottles_[1]);
-    }
     int bottles_[2];
 };
 
@@ -48,16 +45,18 @@ class Water : public Problem {
 
       init_ = make_shared<WaterNode>(bottles_init);
       init_->parent_move_ = make_shared<WaterMove>();
+
       goal_ = make_shared<WaterNode>(bottles_target);
       goal_->parent_move_ = make_shared<WaterMove>();
+
       name_ = name;
     }
     ~Water() {}
 
+    // relate new node to its parent node
     inline void insert_new_node(const node_ptr&u, node_ptr& new_node, shared_ptr<node_set>& l)
     {
       new_node->parent_ = u;
-      //new_node->parent_move_ = make_shared<WaterMove>(dynamic_pointer_cast<WaterNode>(new_node)->bottles_);
       new_node->depth_ = u->depth_ + 1;
       new_node->current_cost_ = u->current_cost_ + new_node->parent_move_->cost();
       new_node->future_cost_ = this->get_future_cost(new_node);
@@ -155,20 +154,36 @@ class Water : public Problem {
 
 int main()
 {
-  int vol[] = {4, 3};
+  int vol[] = {100, 3};
   int init[] = {0, 0};
-  int goal[] = {2, 0};
+  int goal[] = {77, 0};
 
   shared_ptr<Problem> p = make_shared<Water>("Waters", vol, init, goal);
 
-  shared_ptr<Engine> e = make_shared<RBFS>();
+  shared_ptr<Engine> e = make_shared<DFS>();
   shared_ptr<node_list> m = make_shared<node_list>();
-  e->search(p, m);
-  e->show();
-  for (auto& i : *m) i->show();
-cout   << "|Closed|=" << e->closed_size_
-               << ", max(open)=" << e->max_open_
-               << ", depth=" << m->size()-1
-               << ", max(depth)=" << e->max_depth_ << endl;
-  return 0;
+
+  std::chrono::high_resolution_clock::time_point t0 = std::chrono::high_resolution_clock::now();
+
+  auto fut = std::async(std::launch::async, bind(&Engine::search, e, p, m));;
+  std::chrono::milliseconds span (1000); // set time limit
+
+  std::future_status status = fut.wait_for(span);
+  if (status == std::future_status::timeout) {
+    std::cout << "timeout\n";
+  } else if (status == std::future_status::ready) {
+    std::cout << "solution found!\n";
+    // print solution, from init to goal
+    e->show();
+    for (auto& i : *m) i->show();
+  }
+
+  std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+  std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
+  cout << "time=" << ms.count() << "ms"
+    << ", |Closed|=" << e->closed_size_
+    << ", max(open)=" << e->max_open_
+    << ", depth=" << (m->size() > 0 ? m->size()-1 : m->size())
+    << ", max(depth)=" << e->max_depth_ << endl;
+  exit(0); // kill the thread launched by async()
 }

@@ -3,14 +3,20 @@
 #include <vector>
 #include <algorithm>
 #include <iomanip>
+#include <future>
+#include <chrono>
+
+#define N 6
 
 class BlockNode : public Node {
   public:
-    BlockNode() {}
+    BlockNode() : Node() {}
     BlockNode(const vector<int>& board) : Node()
     {
       board_.resize(board.size());
       copy(board.begin(), board.end(), board_.begin());
+
+      // define the hash computation
       unique_hash_ = 0;
       for(auto& i : board_) {
         unique_hash_ ^= i + 0x9e3779b9 + (unique_hash_ << 6) + (unique_hash_ >> 2);
@@ -20,9 +26,9 @@ class BlockNode : public Node {
 
     void show()
     {
-      for (int i = 0; i < 6; ++i) {
-        for (int j = 0; j < 6; ++j) {
-          cout << std::setw(3) << board_[i*6 + j] << ",";
+      for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < N; ++j) {
+          cout << std::setw(3) << board_[i*N + j] << ",";
         }
         cout << endl;
       }
@@ -77,15 +83,15 @@ class Block : public Problem {
       assert(true == l->empty());
 
       for (vector<int>::iterator it = block_id_.begin();
-            it != block_id_.end();
-            ++it)
+          it != block_id_.end();
+          ++it)
       {
         const int id = *it;
         const int len = block_length_[id];
         // pos is the left up corner
         const int pos = find(dynamic_pointer_cast<BlockNode>(u)->board_.begin(),
-                             dynamic_pointer_cast<BlockNode>(u)->board_.end(),
-                             id) - dynamic_pointer_cast<BlockNode>(u)->board_.begin();
+            dynamic_pointer_cast<BlockNode>(u)->board_.end(),
+            id) - dynamic_pointer_cast<BlockNode>(u)->board_.begin();
         const int row = pos / width_, col = pos % width_;
 
         if (block_move_direction_[id] > 0) // move horizontally
@@ -159,8 +165,8 @@ class Block : public Problem {
     size_t get_future_cost(const node_ptr& s)
     {
       const int pos = find(dynamic_pointer_cast<BlockNode>(s)->board_.begin(),
-                           dynamic_pointer_cast<BlockNode>(s)->board_.end(),
-                           target_id_) - dynamic_pointer_cast<BlockNode>(s)->board_.begin();
+          dynamic_pointer_cast<BlockNode>(s)->board_.end(),
+          target_id_) - dynamic_pointer_cast<BlockNode>(s)->board_.begin();
       if (pos == height_ * width_) return 0;
       else {
         const int len = block_length_[target_id_];
@@ -196,33 +202,45 @@ class Block : public Problem {
 
 int main()
 {
-
-  int id[] =      {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-  int length[] =  {2, 3, 2, 3, 2, 3, 2, 2, 2, 2};
+  /*
+     int id[] =      {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+     int length[] =  {2, 3, 2, 3, 2, 3, 2, 2, 2, 2};
   // 1 <===> horizontally, 0 <===> vertically
   int direction[]={1, 0, 0, 1, 0, 0, 1, 1, 1, 1};
   int board[] = {1, -1, 2, 3, 3, 3,
-                 1, -1, 2, 4,-1,-1,
-                 1,  0, 0, 4,-1, 5,
-                 6,  6, 7, 7,-1, 5,
-                 8,  8, 9, 9,-1, 5,
-                 -1,-1,-1,-1,-1,-1};
+  1, -1, 2, 4,-1,-1,
+  1,  0, 0, 4,-1, 5,
+  6,  6, 7, 7,-1, 5,
+  8,  8, 9, 9,-1, 5,
+  -1,-1,-1,-1,-1,-1};
 
-/*
+
   int id[] =      {0, 1, 2, 3, 4, 5, 6, 7};
   int length[] =  {2, 3, 3, 3, 2, 2, 2, 3};
   // 1 <===> horizontally, 0 <===> vertically
   int direction[]={1, 1, 0, 0, 0, 1, 0, 1};
   int board[] = {1, 1, 1, -1, -1, 2,
-                -1,-1, 3, -1, -1, 2,
-                0,  0, 3, -1, -1, 2,
-                4, -1, 3, -1, 5,  5,
-                4, -1,-1, -1, 6, -1,
-                7,  7, 7, -1, 6, -1};
-*/
+  -1,-1, 3, -1, -1, 2,
+  0,  0, 3, -1, -1, 2,
+  4, -1, 3, -1, 5,  5,
+  4, -1,-1, -1, 6, -1,
+  7,  7, 7, -1, 6, -1};
+  */
+
+  int id[] =      {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+  int length[] =  {2, 3, 2, 2, 2, 3, 2, 3, 2, 2, 2,  2};
+  // 1 <===> horizontally, 0 <===> vertically
+  int direction[]={1, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0};
+
+  int board[] = {-1, -1, -1, 2,  3, 3,
+    1,  1,  1, 2, -1, 4,
+    -1, 11,  0, 0,  5, 4,
+    -1, 11, -1,-1,  5, 6,
+    10,  7,  7, 7,  5, 6,
+    10,  8,  8, 9,  9,-1};
 
   shared_ptr<Problem> p = make_shared<Block>("Block",
-      6, 6,
+      N, N,
       vector<int>(id, id+sizeof(id)/sizeof(id[0])),
       vector<int>(length, length+sizeof(length)/sizeof(length[0])),
       vector<int>(direction, direction+sizeof(direction)/sizeof(direction[0])),
@@ -230,14 +248,30 @@ int main()
       0);
 
 
-  shared_ptr<Engine> e = make_shared<RBFS>();
+  shared_ptr<Engine> e = make_shared<IDA_Star>();
   shared_ptr<node_list> m = make_shared<node_list>();
-  e->search(p, m);
-  e->show();
-  for (auto& i : *m) i->show();
-cout   << "|Closed|=" << e->closed_size_
-               << ", max(open)=" << e->max_open_
-               << ", depth=" << m->size()-1
-               << ", max(depth)=" << e->max_depth_ << endl;
-  return 0;
+
+  std::chrono::high_resolution_clock::time_point t0 = std::chrono::high_resolution_clock::now();
+
+  auto fut = std::async(std::launch::async, bind(&Engine::search, e, p, m));;
+  std::chrono::milliseconds span (1000); // set time limit
+
+  std::future_status status = fut.wait_for(span);
+  if (status == std::future_status::timeout) {
+    std::cout << "timeout\n";
+  } else if (status == std::future_status::ready) {
+    std::cout << "solution found!\n";
+    // print solution, from init to goal
+    e->show();
+    for (auto& i : *m) i->show();
+  }
+
+  std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+  std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
+  cout << "time=" << ms.count() << "ms"
+    << ", |Closed|=" << e->closed_size_
+    << ", max(open)=" << e->max_open_
+    << ", depth=" << (m->size() > 0 ? m->size()-1 : m->size())
+    << ", max(depth)=" << e->max_depth_ << endl;
+  exit(0); // kill the thread launched by async()
 }

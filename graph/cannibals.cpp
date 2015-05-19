@@ -2,11 +2,11 @@
 
 #include <vector>
 #include <algorithm>
-
+#include <future>
+#include <chrono>
 
 class CannibalMove : public Move {
   public:
-    CannibalMove() { boat_[0] = boat_[1] = 1; }// start from side1
     CannibalMove(int boat[])
     {
       boat_[0] = boat[0];
@@ -26,11 +26,13 @@ class CannibalNode : public Node {
       parent_move_ = parent_move;
       side1_[0] = side1[0];
       side1_[1] = side1[1];
+
+      // It important to consider which way boat is at
       unique_hash_ = 0;
       unique_hash_ ^= side1_[0] + 0x9e3779b9 + (unique_hash_ << 6) + (unique_hash_ >> 2);
       unique_hash_ ^= side1_[1] + 0x9e3779b9 + (unique_hash_ << 6) + (unique_hash_ >> 2);
 
-      // consider which way boat is at
+      // check which side boat is
       if (dynamic_pointer_cast<CannibalMove>(this->parent_move_)->boat_[0] > 0) {
         unique_hash_ ^= 0 + 0x9e3779b9 + (unique_hash_ << 6) + (unique_hash_ >> 2);
       } else {
@@ -41,7 +43,7 @@ class CannibalNode : public Node {
 
     void show()
     {
-      cout << "(" << side1_[0] << "," << side1_[1] << ")" << ", hash=" << unique_hash_
+      cout << "(" << side1_[0] << "," << side1_[1] << ")"
            << ", depth=" << depth_  << ", c_cost=" << current_cost_ << ", f_cost=" << future_cost_ << endl;
     }
 
@@ -55,20 +57,18 @@ class Cannibal : public Problem {
     Cannibal(const string& name, int init[], int goal[], int cannibals, int missionaries)
       : cannibals_(cannibals), missionaries_(missionaries)
     {
-      move_ptr empty_move = make_shared<CannibalMove>();
-      init_ = make_shared<CannibalNode>(init, empty_move);
-      goal_ = make_shared<CannibalNode>(goal, empty_move);
+      int init_side[] = {1,1}; // start with boat at side 1
+      int goal_side[] = {-1, -1}; // end with boat at side 2
+      init_ = make_shared<CannibalNode>(init, make_shared<CannibalMove>(init_side));
+      goal_ = make_shared<CannibalNode>(goal, make_shared<CannibalMove>(goal_side));
       name_ = name;
-
-      // in this case, the goal test is defined in a different way
-      init_->future_cost_ = get_future_cost(init_);
     }
     ~Cannibal() {}
 
+    // relate new node to its parent node
     inline void insert_new_node(const node_ptr&u, node_ptr& new_node, shared_ptr<node_set>& l)
     {
       new_node->parent_ = u;
-      //new_node->parent_move_ = make_shared<WaterMove>(dynamic_pointer_cast<WaterNode>(new_node)->bottles_);
       new_node->depth_ = u->depth_ + 1;
       new_node->current_cost_ = u->current_cost_ + new_node->parent_move_->cost();
       new_node->future_cost_ = this->get_future_cost(new_node);
@@ -86,6 +86,8 @@ class Cannibal : public Problem {
 
       if (side1_missionaries > 0 && side1_cannibals > side1_missionaries) return;
 
+      // there are only five possible cases on the boat (capacity is 2)
+      // {x, y}, x for cannibals, y for missionaries
       int new_side1[2], boat[2];
       const int boat_side = dynamic_pointer_cast<CannibalMove>(u->parent_move_)->boat_[0] > 0 ? -1 : 1;
       const int valid_boat[5][2] = {{2, 0}, {1, 0}, {1, 1}, {0,  1}, {0,  2}};
@@ -111,12 +113,6 @@ class Cannibal : public Problem {
 
     }
 
-    bool goal_test(const node_ptr& s)
-    {
-      // cannot directly judge by hash which involves boat side
-      return s->future_cost_ == 0;
-    }
-
     size_t get_future_cost(const node_ptr& s)
     {
       size_t cost = 0;
@@ -138,16 +134,32 @@ int main()
   int init[] = {3, 3};
   int goal[] = {0, 0};
 
-  shared_ptr<Problem> p = make_shared<Cannibal>("Cannibals", init, goal, 3, 3);
+  shared_ptr<Problem> p = make_shared<Cannibal>("Cannibals", init, goal, init[0], init[1]);
 
-  shared_ptr<Engine> e = make_shared<RBFS>();
+  shared_ptr<Engine> e = make_shared<SMA_Star>();
   shared_ptr<node_list> m = make_shared<node_list>();
-  e->search(p, m);
-  e->show();
-  for (auto& i : *m) i->show();
-  cout << "|Closed|=" << e->closed_size_
+
+  std::chrono::high_resolution_clock::time_point t0 = std::chrono::high_resolution_clock::now();
+
+  auto fut = std::async(std::launch::async, bind(&Engine::search, e, p, m));;
+  std::chrono::milliseconds span (1000); // set time limit
+
+  std::future_status status = fut.wait_for(span);
+  if (status == std::future_status::timeout) {
+    std::cout << "timeout\n";
+  } else if (status == std::future_status::ready) {
+    std::cout << "solution found!\n";
+    // print solution, from init to goal
+    e->show();
+    for (auto& i : *m) i->show();
+  }
+
+  std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+  std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
+  cout << "time=" << ms.count() << "ms"
+    << ", |Closed|=" << e->closed_size_
     << ", max(open)=" << e->max_open_
-    << ", depth=" << m->size()-1
+    << ", depth=" << (m->size() > 0 ? m->size()-1 : m->size())
     << ", max(depth)=" << e->max_depth_ << endl;
-  return 0;
+  exit(0); // kill the thread launched by async()
 }
