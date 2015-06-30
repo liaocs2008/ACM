@@ -189,7 +189,7 @@ void remove_fixup(node *&root, node *&x) // this function may change root and x 
 
       if ((black == w->left->c) && (black == w->right->c)) { //case 2
         w->c = red;
-        x = x->p; // after x changes to its parent, its color will be reb, successfully finish
+        x = x->p; // after x changes to its parent, its color will be red, successfully finish
       } else if (black == w->right->c) { //case 3
         w->left->c = black;
         w->c = red;
