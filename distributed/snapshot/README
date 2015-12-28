@@ -1,0 +1,4 @@
+This project aims at combing Chandy-Lamport snapshot algorithm with a simple ring 
+maintenance algorithm.
+
+Thrift 0.9.0 is used.
