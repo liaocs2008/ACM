@@ -41,7 +41,7 @@ class LSTMLayer(object):
 
         return state
 
-    def forward(self, x, sc_init=None, h0=None):
+    def forward(self, x, sc_init=None, h_init=None):
         # x : a list of inputs over time steps
         # sc0 : initial state
         # h0 : initial result, which should be None at first time
@@ -49,13 +49,14 @@ class LSTMLayer(object):
         T = len(x)
         state = []
         sc0 = sc_init
+        h0 = h_init
         for t in xrange(T):
             state.append( self.forward_t(x[t], sc0, h0) )
             sc0 = state[-1][:, 4*k:5*k]
             h0 = state[-1][:, 5*k:6*k]
         return state
 
-    def backward_t(self, d_sc, d_h, x, state, sc0=None):
+    def backward_t(self, d_sc, d_h, x, state, sc0=None, h0=None):
         # d_sc : do / dsc at time step t
         # d_h : do / dh at time step t
         # state : state at time step t
@@ -76,10 +77,11 @@ class LSTMLayer(object):
         grad[:, :1*K] = d_sc * state[:, 3*K:4*K] * state[:, :1*K] * (1. - state[:, :1*K])
         # d_w
         self.d_wx += np.dot(np.concatenate((x, np.ones([x.shape[0], 1])), axis=1).T, grad)
-        self.d_wh += np.dot(state[:,5*K:6*K].T, grad)
+        if h0 is not None:
+            self.d_wh += np.dot(h0.T, grad)
         return d_sc * state[:, 4*K:5*K], np.dot(grad, self.wh.T), np.dot(grad, self.wx[1:,:].T)
 
-    def backward(self, x, state, d_h_o, sc_init=None):
+    def backward(self, x, state, d_h_o, sc_init=None, h_init=None):
         # d_h_o : a list of do/dht
         k = self.wh.shape[1] / 4
         T = len(d_h_o)
@@ -89,12 +91,15 @@ class LSTMLayer(object):
         for t in reversed(xrange(T)):
             if 0 == t:
                 sc0 = sc_init
+                h0 = h_init
             else:
                 sc0 = state[t-1][:, 4*k:5*k]
-            d_sc, d_h_tmp, d_x_tmp = self.backward_t(d_sc, d_h[t], x[t], state[t], sc0)
-            d_h[t-1] += d_h_tmp
+                h0 = state[t-1][:, 5*k:6*k]
+            d_sc, d_h_tmp, d_x_tmp = self.backward_t(d_sc, d_h[t], x[t], state[t], sc0, h0)
+            if 0 != t:
+                d_h[t-1] += d_h_tmp
             d_x.append(d_x_tmp)
-        return d_x, d_h
+        return d_x, d_h, d_sc, d_h_tmp # now d_sc = d_sc0, d_h_tmp = d_h0
 
     def update(self, lr=0.01):
         self.wx = self.wx - lr * self.d_wx
@@ -128,12 +133,13 @@ def checkSequentialMatchesBatch():
 
     inputs = [fc1.forward(xi) for xi in x]
 
+    sc0 = np.random.random([inputs[0].shape[0], K2])
+    h0 = np.random.random([inputs[0].shape[0], K2]) # this must relate to its input size
     # one time forward
-    state = lstm.forward(inputs)
+    state = lstm.forward(inputs, sc0, h0)
 
     # sequential forward
-    sc0 = None
-    h0 = None
+
     for t in xrange(T):
         st = lstm.forward_t(inputs[t], sc0, h0)
         sc0 = st[:, 4*K2:5*K2]
@@ -149,74 +155,84 @@ def checkSequentialMatchesBatch():
     # backward checking
 
     # one time backward
-    d_x, d_h = lstm.backward(inputs, state, grads)
+    d_x, d_h, d_sc0, d_h0 = lstm.backward(inputs, state, grads)
 
     # sequential backward
     d_sc = np.zeros([state[0].shape[0], K2])
     for t in reversed(xrange(T)):
         if 0 == t:
-            sc0 = None
+            sc_prev = sc0
+            h_prev = h0
         else:
-            sc0 = state[t-1][:, 4*K2:5*K2]
-        d_sc, d_ht, d_xt = lstm.backward_t(d_sc, grads[t], inputs[t], state[t], sc0)
-        grads[t-1] += d_ht # here change the value of grads
-        assert np.allclose(d_xt, d_x[t])
-        assert np.allclose(d_h[t], grads[t])
+            sc_prev = state[t-1][:, 4*K2:5*K2]
+            h_prev = state[t-1][:, 5*K2:6*K2]
+        d_sc, d_ht, d_xt = lstm.backward_t(d_sc, grads[t], inputs[t], state[t], sc_prev, h_prev)
+        if 0 != t:
+            grads[t-1] += d_ht # here change the value of grads
+            assert np.allclose(d_xt, d_x[t])
+            assert np.allclose(d_h[t], grads[t])
+        else:
+            assert np.allclose(d_sc, d_sc0)
+            assert np.allclose(d_ht, d_h0)
         fc1.backward(x[t], d_x[t]) # here should apply d_x from lstm rather than grads from fc2
+
 
     print "Successfully go forward and backward through all layers"
 
 
 
 
-
-def fwd(x, y, lstm, cost):
-    inputs = [x]
-    nlayers = len(layers)
-    for i in xrange(nlayers):
-        inputs.append( layers[i].forward(inputs[-1]) ) # inputs[i] is the input for i-th layer
-    loss = cost.forward(inputs[-1], y)
+def fwd(x, y, sc0, h0, lstm, cost):
+    T = len(x)
+    B = x[0].shape[0]
+    K = O = y.shape[1]
+    state = lstm.forward(x, sc0, h0)
+    pred = np.zeros([T*B, O])
+    for t in xrange(T):
+        pred[t*B:(t+1)*B,:] = state[t][:, 5*K:6*K]
+    loss = cost.forward(pred, y)
     return loss
+
 
 def GradientChecking():
     # this is to check lstm layer
+    # euclidean cost happens to have the linearity
+    # its gradients is the same even no matter doing in T batches or doing in a single one
+
     B = 3  # batch size
     I = 7  # input size
-    O = I   # output size
+    K = O = I   # output size
     T = 4
 
+    sc0 = np.random.random([B, K])
+    h0 = np.random.random([B, K])
+
     x = []
-    y = []
+    y = np.zeros([T*B, O])
     for t in xrange(T):
         x.append( np.random.random([B, I]) * 2 * np.pi / T + float(t) * 2 * np.pi / T )
-        y.append( np.sin(x[-1]) )
+        y[t*B:(t+1)*B,:] = np.sin(x[-1])
 
-    lstm = LSTMLayer(I, O, "lstm1")
-
-    # forward and backward
-
-    # inputs[i] is the input for i-th layer
-    # the last of inputs[i] must be the output of current network
-    inputs = [x]
-    for i in xrange(nlayers):
-        inputs.append( layers[i].forward(inputs[-1]) ) # inputs[i] is the input for i-th layer
-
+    lstm = LSTMLayer(I, K, "lstm1")
     cost = EuclideanLoss()
-    # loss = cost.forward(inputs[-1], y)
 
-    # grads[i] is the gradients for i-th layer, but in the reverse order
-    grads = [cost.backward(inputs[-1], y)]
-    for i in reversed(xrange(nlayers)):
-        grads.append( layers[i].backward(inputs[i], grads[-1]) ) # grads[i]
+    state = lstm.forward(x, sc0, h0)
+    pred = np.zeros([T*B, O])
+    for t in xrange(T):
+        pred[t*B:(t+1)*B,:] = state[t][:, 5*K:6*K]
+    loss = cost.forward(pred, y)
+
+    grads = np.split(cost.backward(pred, y), T, axis=0)
+    d_x, d_h, d_sc0, d_h0 = lstm.backward(x, state, grads)
 
     # following checking method is from https://gist.github.com/karpathy/587454dc0146a6ae21fc
     delta = 1e-5
     rel_error_thr_warning = 1e-2
     rel_error_thr_error = 1
 
-    checklist = [layers[0].w]
-    grads_analytic = [layers[0].dw]
-    names = ['w', 'c']
+    checklist = [lstm.wx, lstm.wh, sc0, h0]
+    grads_analytic = [lstm.d_wx, lstm.d_wh, d_sc0, d_h0]
+    names = ['wx', 'wh', 'sc0', 'h0']
     for j in xrange(len(checklist)):
         mat = checklist[j]
         dmat = grads_analytic[j]
@@ -226,11 +242,11 @@ def GradientChecking():
 
             # test f(x + delta_x)
             mat.flat[i] = old_val + delta
-            loss0 = fwd(x, y, layers, cost)
+            loss0 = fwd(x, y, sc0, h0, lstm, cost)
 
             # test f(x - delta_x)
             mat.flat[i] = old_val - delta
-            loss1 = fwd(x, y, layers, cost)
+            loss1 = fwd(x, y, sc0, h0, lstm, cost)
 
             mat.flat[i] = old_val # recover
 
@@ -256,4 +272,5 @@ def GradientChecking():
 
 
 if __name__ == "__main__":
-    checkSequentialMatchesBatch()
+    #checkSequentialMatchesBatch()
+    GradientChecking()
