@@ -13,14 +13,14 @@ public:
     }
 
     void forward(Mat& x, Mat& a) {
-        cout << name << " forward " << endl;
+        //cout << name << " forward " << endl;
         assert(0 == apply_sigmoid(&x, &a) );
     }
 
-    void backward(Mat& a, Mat& d_b, Mat& d_a) {
-        cout << name << " backward " << endl;
-        assert(0 == mult_elementwise(&a, &a, &d_a, 0)); // d_a = a * a
-        assert(0 == subtract_elementwise(&a, &d_a, &d_a)); // d_a = a - d_a = a - a^2
+    // for other layers, usually takes a, but for sigmoid, we take b
+    void backward(Mat& b, Mat& d_b, Mat& d_a) {
+        //cout << name << " backward " << endl;
+        assert(0 == sigmoid_deriv_aux(&b, &d_a)); // d_a = a - a^2
         assert(0 == mult_elementwise(&d_a, &d_b, &d_a, 0)); // d_a = (a - a^2) * d_b
     }
 

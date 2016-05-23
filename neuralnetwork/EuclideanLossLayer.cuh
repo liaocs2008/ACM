@@ -52,21 +52,24 @@ public:
 
 
     Dtype forward(Mat& pred, Mat& target) {
-        cout << name << " forward " << endl;
+        //cout << name << " forward " << endl;
         assert(0 == subtract_elementwise(&pred, &target, &loss));
 
         // there is some problem unknown about using this function
         int err = 0;
-        Dtype l2 = 0.5 * euclid_norm(&loss, &err);
+        Dtype l2 = euclid_norm(&loss, &err);
+        l2 = 0.5 * l2 * l2;
         assert(0 == err);
 
         //assert(0 == mult_elementwise(&loss, &loss, &loss, 0));
-        //Dtype l2 = sum_all(&loss, &err);
+        //Dtype l2 = sum_all(&loss, &err); //illegal memory access
+        //Dtype l2 = 0;
+
         return l2;
     }
 
     void backward(Mat& pred, Mat& target, Mat& d_b) {
-        cout << name << " backward " << endl;
+        //cout << name << " backward " << endl;
         assert(0 == subtract_elementwise(&pred, &target, &d_b));
     }
 
