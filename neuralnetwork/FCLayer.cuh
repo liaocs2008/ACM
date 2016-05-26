@@ -34,7 +34,7 @@ class FCLayer {
 
     void forward(Mat& x, Mat& a) {
         assert(x.size[1] == I && a.size[1] == H);
-        cout << name << " forward " << endl;
+        //cout << name << " forward " << endl;
         assert(0 == dot(&x, &w, &a, 0, 1)); // a = 0*a + <x, w>
         assert(0 == add_row_vec(&a, &c, &a)); // a = a + c
     }
@@ -42,7 +42,7 @@ class FCLayer {
     void backward(Mat& x, Mat& d_a, Mat& d_x) {
         // x = (B, I), d_a = (B, H), d_x = (B, I)
         assert(x.size[1]==I && d_a.size[1]==H && d_x.size[0]==x.size[0]);
-        cout << name << " backward " << endl;
+        //cout << name << " backward " << endl;
 
         set_transpose(&x, 1);
         assert(0 == dot(&x, &d_a, &d_w, 0, 1)); // d_w = <x^T, d_a>
@@ -54,10 +54,10 @@ class FCLayer {
         set_transpose(&w, 0);
     }
 
-    void update(Dtype lr = 0.01) {
-        assert(0 == add_mult(&w, &d_w, lr));
+    void update(Dtype lr = 0.001) {
+        assert(0 == add_mult(&w, &d_w, -lr));
         assert(0 == assign_scalar(&d_w, 0));
-        assert(0 == add_mult(&c, &d_c, lr));
+        assert(0 == add_mult(&c, &d_c, -lr));
         assert(0 == assign_scalar(&d_c, 0));
     }
 

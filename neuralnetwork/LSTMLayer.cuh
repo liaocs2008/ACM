@@ -218,12 +218,12 @@ public:
         }
     }
 
-    void update(Dtype lr = 0.01) {
-        assert(0 == add_mult(&wx, &d_wx, lr));
+    void update(Dtype lr = 0.001) {
+        assert(0 == add_mult(&wx, &d_wx, -lr));
         assert(0 == assign_scalar(&d_wx, 0));
-        assert(0 == add_mult(&wh, &d_wh, lr));
+        assert(0 == add_mult(&wh, &d_wh, -lr));
         assert(0 == assign_scalar(&d_wh, 0));
-        assert(0 == add_mult(&c, &d_c, lr));
+        assert(0 == add_mult(&c, &d_c, -lr));
         assert(0 == assign_scalar(&d_c, 0));
     }
 
