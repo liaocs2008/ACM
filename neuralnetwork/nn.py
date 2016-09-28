@@ -147,6 +147,31 @@ class EuclideanLoss(object):
             print "euclidean loss backward", d_b.shape
         return d_b
 
+    
+    
+class SoftmaxCrossEntropyLoss(object):
+
+    def __init__(self, name=None):
+        self.name = name
+        self.prob = None
+
+    def forward(self, x, target): # example, x = [0.6,-0.4,0,2.1], target = 3
+        e_x = np.exp(x - x.max(axis=1)[:, None])
+        self.prob = e_x / e_x.sum(axis=1)[:, None]
+        cost =  np.sum( - np.log(np.maximum(self.prob[np.arange(x.shape[0]), np.ravel(target)], 1e-6) ) )
+        if __debug__:
+            print "SoftmaxCrossEntropyLoss", cost
+        return cost
+
+    def backward(self, x, target):
+        d_b = np.copy(self.prob)
+        d_b[np.arange(x.shape[0]), np.ravel(target)] -= 1.
+        if __debug__:
+            print "SoftmaxCrossEntropyLoss backward", d_b.shape
+        return d_b
+    
+
+    
 
 def GradientChecking1():
     # this is to just check network can go both forward and backward
@@ -304,7 +329,7 @@ def GradientChecking3():
     checklist = [layers[0].r, layers[1].r]
     grads_analytic = [layers[0].dr, layers[1].dr]
     names = ['r0', 'r1']
-        for j in xrange(len(checklist)):
+    for j in xrange(len(checklist)):
         mat = checklist[j]
         dmat = grads_analytic[j]
         name = names[j]
