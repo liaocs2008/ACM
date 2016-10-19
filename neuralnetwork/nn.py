@@ -170,6 +170,53 @@ class FC(object):
         self.dc.fill(0.)
 
 
+
+class BaseConv(object):
+    """
+    This is only for two matrix doing convolution
+    """
+
+    def __init__(self, I, name=None):
+        # I : input size
+        self.w = init_w([I, I])
+        self.dw = np.zeros(self.w.shape)
+
+        self.name = name
+
+    def forward(self, x):
+        r = np.zeros([x.shape[0] - self.w.shape[0] + 1, x.shape[1] - self.w.shape[1] + 1])
+        for i in xrange(r.shape[0]):
+            for j in xrange(r.shape[1]):
+                r[i,j] = np.sum( self.w * x[i:i+self.w.shape[0],j:j+self.w.shape[1]] )
+        if __debug__:
+            print self.name, "forward", x.shape, "to", r.shape
+        return r
+
+    def backward(self, x, d_a):
+        for a in xrange(self.w.shape[0]):
+            for b in xrange(self.w.shape[1]):
+                self.dw[a,b] = np.sum(d_a * x[a:a+d_a.shape[0],b:b+d_a.shape[1]])
+
+        d_x = np.zeros(x.shape) # this is for next backpropagate layer
+        for i in xrange(d_a.shape[0]):
+            for j in xrange(d_a.shape[1]):
+                for a in xrange(self.w.shape[0]):
+                    for b in xrange(self.w.shape[1]):
+                        if i > a and j > b:
+                            d_x[i,j] += d_a[i-a,j-b] * self.w[a, b]
+
+        if __debug__:
+            print self.name, "backward", d_a.shape, "to", d_x.shape
+        return d_x
+
+    def update(self, lr=0.01):
+        self.w = self.w - lr * self.dw
+        self.dw.fill(0.)
+
+
+        
+        
+        
 sigmoid = lambda x: 1. / (1. + np.exp(-x))
 
 
@@ -508,7 +555,75 @@ def GradientChecking4():
     print "Finish checking fully connected"
 
 
-    
+
+def GradientChecking5():
+    x = np.random.random([5,5])
+    y = np.array([[0.9]]) # randomly selected
+
+    layers = [BaseConv(5)]
+    nlayers = len(layers)
+
+    # forward and backward
+
+    # inputs[i] is the input for i-th layer
+    # the last of inputs[i] must be the output of current network
+    inputs = [x]
+    for i in xrange(nlayers):
+        inputs.append( layers[i].forward(inputs[-1]) ) # inputs[i] is the input for i-th layer
+
+    cost = EuclideanLoss()
+    # loss = cost.forward(inputs[-1], y)
+
+    # grads[i] is the gradients for i-th layer, but in the reverse order
+    grads = [cost.backward(inputs[-1], y)]
+    for i in reversed(xrange(nlayers)):
+        grads.append( layers[i].backward(inputs[i], grads[-1]) ) # grads[i]
+
+    delta = 1e-5
+    rel_error_thr_warning = 1e-2
+    rel_error_thr_error = 1
+
+    checklist = [layers[0].w]
+    grads_analytic = [layers[0].dw]
+    names = ['r0']
+    for j in xrange(len(checklist)):
+        mat = checklist[j]
+        dmat = grads_analytic[j]
+        name = names[j]
+        for i in xrange(mat.size):
+            old_val = mat.flat[i]
+
+            # test f(x + delta_x)
+            mat.flat[i] = old_val + delta
+            loss0 = fwd(x, y, layers, cost)
+
+            # test f(x - delta_x)
+            mat.flat[i] = old_val - delta
+            loss1 = fwd(x, y, layers, cost)
+
+            mat.flat[i] = old_val # recover
+
+            grad_analytic = dmat.flat[i]
+            grad_numerical = (loss0 - loss1) / (2 * delta)
+
+            if grad_numerical == 0 and grad_analytic == 0:
+                rel_error = 0 # both are zero, OK.
+                status = 'OK'
+            elif abs(grad_numerical) < 1e-7 and abs(grad_analytic) < 1e-7:
+                rel_error = 0 # not enough precision to check this
+                status = 'VAL SMALL WARNING'
+            else:
+                rel_error = abs(grad_analytic - grad_numerical) / abs(grad_numerical + grad_analytic)
+                status = 'OK'
+                if rel_error > rel_error_thr_warning: status = 'WARNING'
+                if rel_error > rel_error_thr_error: status = '!!!DANGEROUS ERROR!!!'
+
+            print '%s checking param %s index %s (val = %+8f), analytic = %+8f, numerical = %+8f, relative error = %+8f' \
+                    % (status, name, `np.unravel_index(i, mat.shape)`, old_val, grad_analytic, grad_numerical, rel_error)
+
+    print "Finish checking fully connected"
+
+
     
     
 
@@ -517,4 +632,5 @@ if __name__ == "__main__":
     #GradientChecking2()
     #circulant_check()
     #GradientChecking3()
-    GradientChecking4()
+    #GradientChecking4()
+    GradientChecking5()
