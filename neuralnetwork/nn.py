@@ -170,7 +170,6 @@ class FC(object):
         self.dc.fill(0.)
 
 
-
 class BaseConv(object):
     """
     This is only for two matrix doing convolution
@@ -188,6 +187,9 @@ class BaseConv(object):
         for i in xrange(r.shape[0]):
             for j in xrange(r.shape[1]):
                 r[i,j] = np.sum( self.w * x[i:i+self.w.shape[0],j:j+self.w.shape[1]] )
+                #for a in xrange(self.w.shape[0]):
+                #    for b in xrange(self.w.shape[1]):
+                #        r[i,j] = x[i+a, j+b] * self.w[a, b]
         if __debug__:
             print self.name, "forward", x.shape, "to", r.shape
         return r
@@ -200,20 +202,23 @@ class BaseConv(object):
         self.dw += dw # !!!!!! notice that this is for multi-channel
 
         d_x = np.zeros(x.shape) # this is for next backpropagate layer
+        assert d_a.shape[0] + self.w.shape[0] - 1 == d_x.shape[0]
+        assert d_a.shape[1] + self.w.shape[1] - 1 == d_x.shape[1]
         for i in xrange(d_a.shape[0]):
             for j in xrange(d_a.shape[1]):
                 for a in xrange(self.w.shape[0]):
                     for b in xrange(self.w.shape[1]):
-                        if i > a and j > b:
-                            d_x[i,j] += d_a[i-a,j-b] * self.w[a, b]
+                        d_x[i+a,j+b] += d_a[i,j] * self.w[a, b]
 
         if __debug__:
+
             print self.name, "backward", d_a.shape, "to", d_x.shape
         return d_x
 
     def update(self, lr=0.01):
         self.w = self.w - lr * self.dw
         self.dw.fill(0.)
+
 
 
 class Conv(object):
@@ -251,9 +256,7 @@ class Conv(object):
         for c in self.c:
             c.update(lr)
 
-
-
-
+        
         
         
         
@@ -595,12 +598,11 @@ def GradientChecking4():
     print "Finish checking fully connected"
 
 
-
 def GradientChecking5():
     x = np.random.random([5,5])
     y = np.array([[0.9]]) # randomly selected
 
-    layers = [BaseConv(5)]
+    layers = [BaseConv(3, 'base0'), BaseConv(3, 'base1')]
     nlayers = len(layers)
 
     # forward and backward
@@ -623,9 +625,9 @@ def GradientChecking5():
     rel_error_thr_warning = 1e-2
     rel_error_thr_error = 1
 
-    checklist = [layers[0].w]
-    grads_analytic = [layers[0].dw]
-    names = ['r0']
+    checklist = [layers[i].w for i in xrange(nlayers)]
+    grads_analytic = [layers[i].dw for i in xrange(nlayers)]
+    names = [layers[i].name for i in xrange(nlayers)]
     for j in xrange(len(checklist)):
         mat = checklist[j]
         dmat = grads_analytic[j]
@@ -661,16 +663,16 @@ def GradientChecking5():
             print '%s checking param %s index %s (val = %+8f), analytic = %+8f, numerical = %+8f, relative error = %+8f' \
                     % (status, name, `np.unravel_index(i, mat.shape)`, old_val, grad_analytic, grad_numerical, rel_error)
 
-    print "Finish checking fully connected"
-
-
-
+                
+                
+                
 def GradientChecking6():
-    x = np.random.random([10,3,5,5])
+    x = np.random.random([10,3,17,17])
     y = np.zeros([10,7,1,1])
     y[:,:,0,0] = np.random.random([10,7]) # randomly selected
 
-    layers = [Conv(x.shape, y.shape, 'conv1')]
+    layers = [Conv(x.shape, (10,5,13,13), 'conv0'), Conv((10,5,13,13), y.shape, 'conv1')]
+    #layers = [Conv(x.shape, y.shape, 'conv0')]
     nlayers = len(layers)
 
     # forward and backward
@@ -693,9 +695,9 @@ def GradientChecking6():
     rel_error_thr_warning = 1e-2
     rel_error_thr_error = 1
 
-    checklist = [c.w for c in layers[0].c]
-    grads_analytic = [c.dw for c in layers[0].c]
-    names = [c.name for c in layers[0].c]
+    checklist = [c.w for i in xrange(nlayers) for c in layers[i].c]
+    grads_analytic = [c.dw for i in xrange(nlayers) for c in layers[i].c]
+    names = [c.name for i in xrange(nlayers) for c in layers[i].c]
     for j in xrange(len(checklist)):
         mat = checklist[j]
         dmat = grads_analytic[j]
@@ -732,7 +734,8 @@ def GradientChecking6():
                     % (status, name, `np.unravel_index(i, mat.shape)`, old_val, grad_analytic, grad_numerical, rel_error)
 
 
-    
+
+
     
 
 if __name__ == "__main__":
