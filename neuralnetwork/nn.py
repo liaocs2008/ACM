@@ -89,6 +89,68 @@ class CircFC(object):
         self.r = self.r - lr * self.dr
         self.dr.fill(0.)
 
+class NewCircFC(object):
+    def __init__(self, I, H, name=None):
+        # I : input size
+        # H : hidden size
+        self.I = I
+        self.H = H
+        if self.I <= self.H:
+            self.k = I
+            self.c = [CircFC(self.k, self.k, name + '_tmp_%d' % i) if (i + 1) * self.k <= self.H
+                      else CircFC(self.k, self.H - i * self.k, name + '_tmp_%d' % i)
+                      for i in xrange((self.H + self.I - 1) / self.I)]
+        else:
+            self.k = H
+            self.c = [CircFC(self.k, self.k, name + '_tmp_%d' % i) if (i + 1) * self.k <= self.I
+                      else CircFC(self.I - i * self.k, self.k, name + '_tmp_%d' % i)
+                      for i in xrange((self.I + self.H - 1) / self.H)]
+        self.name = name
+        print "ATTENTION: You are using NewCircFC"
+
+    def forward(self, x):
+        assert self.I == x.shape[1]
+        a = np.zeros((x.shape[0], self.H))
+        if self.I <= self.H:
+            for i in xrange((self.H + self.I - 1) / self.I): # ceil(5/3)=2, i={0,1} -- {0,3}
+                end = (i + 1) * self.k
+                if end > self.H:
+                    end = self.H
+                a[:, i*self.k:end] = self.c[i].forward(x)
+        else:
+            for i in xrange((self.I + self.H - 1) / self.H):
+                end = (i + 1) * self.k
+                if end > self.I:
+                    end = self.I
+                a += self.c[i].forward(x[:,i*self.k:end])
+        if __debug__:
+            print self.name, "forward", x.shape, "to", a.shape
+        return a
+
+    def backward(self, x, d_a):
+        d_x = np.zeros(x.shape)
+        if self.I <= self.H:
+            for i in xrange((self.H + self.I - 1) / self.I): # ceil(5/3)=2, i={0,1} -- {0,3}
+                end = (i + 1) * self.k
+                if end > self.H:
+                    end = self.H
+                d_x += self.c[i].backward(x, d_a[:,i*self.k:end])
+        else:
+            for i in xrange((self.I + self.H - 1) / self.H):
+                end = (i + 1) * self.k
+                if end > self.I:
+                    end = self.I
+                d_x[:, i*self.k:end] = self.c[i].backward(x[:,i*self.k:end], d_a)
+        if __debug__:
+            print self.name, "backward", d_a.shape, "to", d_x.shape
+        return d_x
+
+    def update(self, lr=0.01):
+        for i in xrange(len(self.c)):
+            self.c[i].update(lr)
+
+    
+
         
 class CauchyFC(object):
     def __init__(self, I, H, name=None):
