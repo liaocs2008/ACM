@@ -275,7 +275,8 @@ class BaseConv(object):
 
     def __init__(self, I, name=None):
         # I : input size
-        self.w = init_w([I, I])
+        self.I = I
+        self.w = init_w([self.I, self.I])
         self.dw = np.zeros(self.w.shape)
 
         self.name = name
@@ -285,10 +286,11 @@ class BaseConv(object):
         for i in xrange(r.shape[0]):
             for j in xrange(r.shape[1]):
                 r[i,j] = np.sum( self.w * x[i:i+self.w.shape[0],j:j+self.w.shape[1]] )
-                #for a in xrange(self.w.shape[0]):
-                #    for b in xrange(self.w.shape[1]):
-                #        r[i,j] = x[i+a, j+b] * self.w[a, b]
         if __debug__:
+            w = self.w.ravel()[::-1].reshape([self.I, self.I])
+            s = [self.I + x.shape[0] - 1, self.I + x.shape[1] - 1]
+            fr = np.fft.irfft2(np.fft.rfft2(w, s) * np.fft.rfft2(x, s), s)[(self.I-1):(x.shape[0]), (self.I-1):(x.shape[1])]
+            assert np.allclose(fr, r)
             print self.name, "forward", x.shape, "to", r.shape
         return r
 
@@ -308,7 +310,18 @@ class BaseConv(object):
                     for b in xrange(self.w.shape[1]):
                         d_x[i+a,j+b] += d_a[i,j] * self.w[a, b]
 
+
         if __debug__:
+            da = d_a.flatten()[::-1].reshape(d_a.shape)
+            s = [da.shape[0] + x.shape[0] - 1, da.shape[1] + x.shape[1] - 1]
+            fdw = np.fft.irfft2(np.fft.rfft2(da, s) * np.fft.rfft2(x, s), s)
+            fdw = fdw[(d_a.shape[0]-1):(x.shape[0]), (d_a.shape[1]-1):(x.shape[1])]
+            assert np.allclose(fdw, dw)
+
+            w = self.w#.ravel()[::-1].reshape([self.I, self.I])
+            s = [d_a.shape[0] + self.I - 1, d_a.shape[1] + self.I - 1]
+            fdx = np.fft.irfft2(np.fft.rfft2(d_a, s) * np.fft.rfft2(w, s), s)
+            assert np.allclose(fdx, d_x)
             print self.name, "backward", d_a.shape, "to", d_x.shape
         return d_x
 
@@ -672,8 +685,8 @@ def GradientChecking3():
 
 
 def GradientChecking5():
-    x = np.random.random([5,5])
-    y = np.array([[0.9]]) # randomly selected
+    x = np.random.random([15,15])
+    y = np.random.random([11,11]) # randomly selected
 
     layers = [BaseConv(3, 'base0'), BaseConv(3, 'base1')]
     nlayers = len(layers)
@@ -1052,9 +1065,9 @@ if __name__ == "__main__":
     #GradientChecking2()
     #circulant_check()
     #GradientChecking3()
-    #GradientChecking5()
+    GradientChecking5()
     #GradientChecking6()
     #GradientChecking7()
     #GradientChecking8()
-    GradientChecking9()
+    #GradientChecking9()
     pass
