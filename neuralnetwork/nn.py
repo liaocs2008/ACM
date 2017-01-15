@@ -125,6 +125,75 @@ CircFC = NeatCircFC
 
 
 
+def time_test2():
+    b = 32
+    d = 28 * 28
+    x0 = np.random.random([b, d])
+    W0 = np.random.random(d)
+
+    # http://stackoverflow.com/questions/7370801/measure-time-elapsed-in-python
+    from timeit import default_timer as timer
+    # from time import time as timer
+
+    from scipy.linalg import circulant
+
+
+    I = d
+    H = d
+
+    #circ = NeatCircFC(I, H, 'neatcircfc')
+    circ = CircFC(I, H, 'circfc')
+    circ.r = W0
+
+    fc = FC(I, H, 'fc')
+    fc.w = circulant(W0)[:H]
+    fc.c[:] = 0
+
+    n = 10
+    fwd_circ_time = [0] * n
+    fwd_fc_time = [0] * n
+    bck_circ_time = [0] * n
+    bck_fc_time = [0] * n
+    for i in xrange(n):
+
+        # circfc
+        start = timer()
+        y0 = circ.forward(x0)
+        end = timer()
+        fwd_circ_time[i] = end - start
+
+        # ground truth
+        start = timer()
+        y1 = fc.forward(x0)
+        end = timer()
+        fwd_fc_time[i] = end - start
+
+        assert np.allclose(y0, y1)
+
+        d_a = np.random.random(y0.shape)
+
+        start = timer()
+        g0 = circ.backward(x0, d_a)
+        end = timer()
+        bck_circ_time[i] = end - start
+
+        start = timer()
+        g1 = fc.backward(x0, d_a)
+        end = timer()
+        bck_fc_time[i] = end - start
+
+        assert np.allclose(g0, g1)
+
+
+    print "avg(fwd_circ_time) = ", sum(fwd_circ_time) / float(n)
+    print "avg(fwd_fc_time) = ", sum(fwd_fc_time) / float(n)
+    print "avg(bck_circ_time) = ", sum(bck_circ_time) / float(n)
+    print "avg(bck_fc_time) = ", sum(bck_fc_time) / float(n)
+
+
+
+
+
 class NewCircFC(object):
     def __init__(self, I, H, name=None):
         # I : input size
@@ -1103,10 +1172,11 @@ if __name__ == "__main__":
     #GradientChecking1()
     #GradientChecking2()
     #circulant_check()
-    GradientChecking3()
+    #GradientChecking3()
     #GradientChecking5()
     #GradientChecking6()
     #GradientChecking7()
     #GradientChecking8()
     #GradientChecking9()
+    time_test2()
     pass
