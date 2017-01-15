@@ -282,45 +282,44 @@ class BaseConv(object):
         self.name = name
 
     def forward(self, x):
-        r = np.zeros([x.shape[0] - self.w.shape[0] + 1, x.shape[1] - self.w.shape[1] + 1])
-        for i in xrange(r.shape[0]):
-            for j in xrange(r.shape[1]):
-                r[i,j] = np.sum( self.w * x[i:i+self.w.shape[0],j:j+self.w.shape[1]] )
+        self.dw = 0 # this is to clear, corresponding to the accumulation in backward
+        w = self.w.ravel()[::-1].reshape([self.I, self.I])
+        s = [self.I + x.shape[0] - 1, self.I + x.shape[1] - 1]
+        r = np.fft.irfft2(np.fft.rfft2(w, s) * np.fft.rfft2(x, s), s)[(self.I-1):(x.shape[0]), (self.I-1):(x.shape[1])]
         if __debug__:
-            w = self.w.ravel()[::-1].reshape([self.I, self.I])
-            s = [self.I + x.shape[0] - 1, self.I + x.shape[1] - 1]
-            fr = np.fft.irfft2(np.fft.rfft2(w, s) * np.fft.rfft2(x, s), s)[(self.I-1):(x.shape[0]), (self.I-1):(x.shape[1])]
+            fr = np.zeros([x.shape[0] - self.w.shape[0] + 1, x.shape[1] - self.w.shape[1] + 1])
+            for i in xrange(r.shape[0]):
+                for j in xrange(r.shape[1]):
+                    fr[i,j] = np.sum( self.w * x[i:i+self.w.shape[0],j:j+self.w.shape[1]] )
             assert np.allclose(fr, r)
             print self.name, "forward", x.shape, "to", r.shape
         return r
 
     def backward(self, x, d_a):
-        dw = np.zeros(self.dw.shape)
-        for a in xrange(self.w.shape[0]):
-            for b in xrange(self.w.shape[1]):
-                dw[a,b] = np.sum(d_a * x[a:a+d_a.shape[0],b:b+d_a.shape[1]])
+        da = d_a.ravel()[::-1].reshape(d_a.shape)
+        s = [da.shape[0] + x.shape[0] - 1, da.shape[1] + x.shape[1] - 1]
+        dw = np.fft.irfft2(np.fft.rfft2(da, s) * np.fft.rfft2(x, s), s)
+        dw = dw[(d_a.shape[0]-1):(x.shape[0]), (d_a.shape[1]-1):(x.shape[1])]
         self.dw += dw # !!!!!! notice that this is for multi-channel
 
-        d_x = np.zeros(x.shape) # this is for next backpropagate layer
-        assert d_a.shape[0] + self.w.shape[0] - 1 == d_x.shape[0]
-        assert d_a.shape[1] + self.w.shape[1] - 1 == d_x.shape[1]
-        for i in xrange(d_a.shape[0]):
-            for j in xrange(d_a.shape[1]):
-                for a in xrange(self.w.shape[0]):
-                    for b in xrange(self.w.shape[1]):
-                        d_x[i+a,j+b] += d_a[i,j] * self.w[a, b]
-
+        s = [d_a.shape[0] + self.I - 1, d_a.shape[1] + self.I - 1]
+        d_x = np.fft.irfft2(np.fft.rfft2(d_a, s) * np.fft.rfft2(self.w, s), s)
 
         if __debug__:
-            da = d_a.flatten()[::-1].reshape(d_a.shape)
-            s = [da.shape[0] + x.shape[0] - 1, da.shape[1] + x.shape[1] - 1]
-            fdw = np.fft.irfft2(np.fft.rfft2(da, s) * np.fft.rfft2(x, s), s)
-            fdw = fdw[(d_a.shape[0]-1):(x.shape[0]), (d_a.shape[1]-1):(x.shape[1])]
+            fdw = np.zeros(self.dw.shape)
+            for a in xrange(self.w.shape[0]):
+                for b in xrange(self.w.shape[1]):
+                    fdw[a,b] = np.sum(d_a * x[a:a+d_a.shape[0],b:b+d_a.shape[1]])
             assert np.allclose(fdw, dw)
 
-            w = self.w#.ravel()[::-1].reshape([self.I, self.I])
-            s = [d_a.shape[0] + self.I - 1, d_a.shape[1] + self.I - 1]
-            fdx = np.fft.irfft2(np.fft.rfft2(d_a, s) * np.fft.rfft2(w, s), s)
+            fdx = np.zeros(x.shape) # this is for next backpropagate layer
+            assert d_a.shape[0] + self.w.shape[0] - 1 == d_x.shape[0]
+            assert d_a.shape[1] + self.w.shape[1] - 1 == d_x.shape[1]
+            for i in xrange(d_a.shape[0]):
+                for j in xrange(d_a.shape[1]):
+                    for a in xrange(self.w.shape[0]):
+                        for b in xrange(self.w.shape[1]):
+                            fdx[i+a,j+b] += d_a[i,j] * self.w[a, b]
             assert np.allclose(fdx, d_x)
             print self.name, "backward", d_a.shape, "to", d_x.shape
         return d_x
@@ -328,6 +327,8 @@ class BaseConv(object):
     def update(self, lr=0.01):
         self.w = self.w - lr * self.dw
         self.dw.fill(0.)
+
+
 
 
 class Conv(object):
@@ -1065,8 +1066,8 @@ if __name__ == "__main__":
     #GradientChecking2()
     #circulant_check()
     #GradientChecking3()
-    GradientChecking5()
-    #GradientChecking6()
+    #GradientChecking5()
+    GradientChecking6()
     #GradientChecking7()
     #GradientChecking8()
     #GradientChecking9()
