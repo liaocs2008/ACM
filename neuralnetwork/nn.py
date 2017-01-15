@@ -29,6 +29,7 @@ def circulant_check():
       print N, np.mean(np.abs(d)), np.linalg.norm(d)
 
 
+"""
 class CircFC(object):
     def __init__(self, I, H, name=None):
         # I : input size
@@ -88,6 +89,41 @@ class CircFC(object):
     def update(self, lr=0.01):
         self.r = self.r - lr * self.dr
         self.dr.fill(0.)
+"""
+
+
+
+class NeatCircFC(object):
+    """
+    This implementation saves the efforts of padding
+    """
+    def __init__(self, I, H, name=None):
+        # I : input size
+        # H : hidden size
+        self.k = max(I, H) # r is now padded
+        self.r = init_w( self.k )
+        self.dr = np.zeros(self.k)
+        self.mapping = np.roll(np.arange(self.k)[::-1], 1) # for shifting x
+        self.name = name
+        self.H = H # desired output size
+
+    def forward(self, x):
+        a = np.fft.irfft(np.fft.rfft(x, n=self.k) * np.fft.rfft(self.r, n=self.k), n=self.k)[:, :self.H]
+        return np.real(a)
+
+    def backward(self, x, d_a):
+        new_x = np.pad(x, [(0, 0), (0, self.k - x.shape[1])], 'constant', constant_values=0)[:, self.mapping]
+        self.dr = np.sum(np.fft.irfft(np.fft.rfft(new_x, n=self.k) * np.fft.rfft(d_a, n=self.k), n=self.k), axis=0)
+        d_x = np.fft.irfft(np.fft.rfft(d_a, n=self.k) * np.fft.rfft(self.r[self.mapping], n=self.k), n=self.k)[:, :x.shape[1]]
+        return d_x
+
+    def update(self, lr=0.01):
+        self.r = self.r - lr * self.dr
+        self.dr.fill(0.)
+
+CircFC = NeatCircFC
+
+
 
 class NewCircFC(object):
     def __init__(self, I, H, name=None):
@@ -366,6 +402,8 @@ class Conv(object):
     def update(self, lr=0.01):
         for c in self.c:
             c.update(lr)
+
+
 
 
 
@@ -1065,9 +1103,9 @@ if __name__ == "__main__":
     #GradientChecking1()
     #GradientChecking2()
     #circulant_check()
-    #GradientChecking3()
+    GradientChecking3()
     #GradientChecking5()
-    GradientChecking6()
+    #GradientChecking6()
     #GradientChecking7()
     #GradientChecking8()
     #GradientChecking9()
