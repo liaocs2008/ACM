@@ -144,7 +144,13 @@ class CircFC_fft(object):
     def backward(self, x, d_a):
         new_x = np.pad(x, [(0, 0), (0, self.k - x.shape[1])], 'constant', constant_values=0)[:, self.mapping]
         self.dr = np.sum(np.fft.rfft(new_x, n=self.k) * np.fft.rfft(d_a, n=self.k), axis=0)
-        d_x = np.fft.irfft(np.fft.rfft(d_a, n=self.k) * np.append(self.r[:self.k/2], self.r[self.k/2]), n=self.k)[:, :x.shape[1]]
+        d_x = np.fft.irfft(np.fft.rfft(d_a, n=self.k) * np.append(np.conj(self.r[:self.k/2]), self.r[self.k/2]), n=self.k)[:, :x.shape[1]]
+        if __debug__:
+            tmpr = np.fft.irfft(self.r, n=self.k)
+            assert np.allclose(np.append(np.conj(self.r[:self.k/2]), self.r[self.k/2]), np.fft.rfft(tmpr[self.mapping], n=self.k))
+            d_x2 = np.fft.irfft(np.fft.rfft(d_a, n=self.k) * np.fft.rfft(tmpr[self.mapping], n=self.k), n=self.k)[:,
+                :x.shape[1]]
+            assert np.allclose(d_x2, d_x)
         return d_x
 
     def update(self, lr=0.01):
@@ -919,7 +925,7 @@ def GradientChecking4():
     grads_analytic = [np.fft.irfft(layers[0].dr, n=layers[0].k), np.fft.irfft(layers[1].dr, n=layers[1].k)]
     names = ['r0', 'r1']
     for j in xrange(len(checklist)):
-        mat = np.fft.irfft(checklist[j]) # this is different from other grad tests
+        mat = np.fft.irfft(checklist[j], n=layers[j].k) # this is different from other grad tests
         dmat = grads_analytic[j]
         name = names[j]
         for i in xrange(mat.size):
@@ -927,12 +933,14 @@ def GradientChecking4():
 
             # test f(x + delta_x)
             mat.flat[i] = old_val + delta
-            checklist[j] = np.fft.rfft(mat)
+            #checklist[j] = np.fft.rfft(mat)
+            layers[j].r = np.fft.rfft(mat, n=layers[j].k)
             loss0 = fwd(x, y, layers, cost)
 
             # test f(x - delta_x)
             mat.flat[i] = old_val - delta
-            checklist[j] = np.fft.rfft(mat)
+            #checklist[j] = np.fft.rfft(mat)
+            layers[j].r = np.fft.rfft(mat, n=layers[j].k)
             loss1 = fwd(x, y, layers, cost)
 
             mat.flat[i] = old_val # recover
@@ -1419,12 +1427,12 @@ if __name__ == "__main__":
     #GradientChecking2()
     #circulant_check()
     #GradientChecking3()
-    #GradientChecking4()
+    GradientChecking4()
     #GradientChecking5()
     #GradientChecking6()
     #GradientChecking7()
     #GradientChecking8()
     #GradientChecking9()
-    GradientChecking10()
+    #GradientChecking10()
     #time_test2()
     pass
