@@ -102,23 +102,33 @@ class DisplaceFC(object):
         self.g = init_w([self.n, 1])
         self.dg = np.zeros(self.g.shape)
         self.h = init_w([self.n, 1])
-        self.dh = np.zeros(self.g.shape)
+        self.dh = np.zeros(self.h.shape)
 
         self.c = init_w([self.n, 1])
         self.dc = np.zeros(self.c.shape)
 
-        self.B = np.diag( np.arange(1, self.n+1) / float(self.n) )
+        tmp = np.arange(self.n) / float(self.n) 
+        self.B = np.diag( tmp )
         # assume self.A is Z1
+        self.coe = np.diag( 1. / (1. - tmp ** self.n) ) 
 
         self.name = name
 
     def forward(self, x):
         self.w = 0
+        Bi = np.identity(self.n)
         for i in xrange(self.n):
             index = np.roll( np.arange(self.n), i )
-            self.w += self.g.dot(self.h.T).dot(self.B ** i)[index,:]
+            self.w += self.g.dot(self.h.T).dot(Bi)[index,:]
+            Bi = Bi.dot(self.B)
+        self.w = self.w.dot(self.coe)
         a = np.dot(x, self.w.T) + self.c.T # a = wx + c
         if __debug__:
+            index = np.roll(np.arange(self.n), 1)
+            assert np.allclose(
+                self.g.dot(self.h.T),
+                self.w - self.w.dot(self.B)[index,:]
+            )
             print self.name, "forward", x.shape, "to", a.shape
         return a
 
@@ -127,10 +137,13 @@ class DisplaceFC(object):
         d_x = np.dot(d_a, self.w) # this is for next backpropagate layer
 
         dw = np.dot(d_a.T, x)
+        Bi = np.identity(self.n)
         for i in xrange(self.n):
-            index = np.roll( np.arange(self.n), self.n-1-i )
-            self.dg = dw.dot(self.B.T ** i).dot(self.h)[index, :]
-            self.dh = dw.dot(self.B.T ** i).dot(self.g)[index, :]
+            index = np.roll( np.arange(self.n), (self.n-i)%self.n )
+            tmp = Bi.dot(self.coe).T
+            self.dg += dw[index,:].dot( tmp ).dot(self.h)
+            self.dh += self.g.T.dot(dw[index,:]).dot( tmp ).T
+            Bi = Bi.dot(self.B)
         if __debug__:
             print self.name, "backward", d_a.shape, "to", d_x.shape
         return d_x
@@ -1616,9 +1629,9 @@ def GradientChecking11():
 
 def GradientChecking12():
     # this is to check fully connected layer
-    B = 1  # batch size
-    I = 1  # input size
-    H = 1
+    B = 8  # batch size
+    I = 8  # input size
+    H = 8
     O = I   # output size
 
     x = init_w([B, I])
@@ -1649,8 +1662,8 @@ def GradientChecking12():
     rel_error_thr_error = 1
 
     checklist = [layers[0].g, layers[0].h, layers[0].c, layers[2].g, layers[2].h, layers[2].c]
-    grads_analytic = [layers[0].dg, layers[0].dh, layers[0].c, layers[2].dg, layers[2].dh, layers[2].c]
-    names = ['0g', '0h', '0c', '2g', '2h', '2c']
+    grads_analytic = [layers[0].dg, layers[0].dh, layers[0].dc, layers[2].dg, layers[2].dh, layers[2].dc]
+    names = ['0g', '0h', '0c', '2g', '2h', '2c' ]
     for j in xrange(len(checklist)):
         mat = checklist[j]
         dmat = grads_analytic[j]
