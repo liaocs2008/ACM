@@ -93,6 +93,8 @@ class CircFC(object):
 
 
 
+"""
+# This is for the version where A=Z1, q=n
 class DisplaceFC(object):
     def __init__(self, I, H, name=None):
         # I : input size
@@ -155,6 +157,59 @@ class DisplaceFC(object):
         self.dh.fill(0.)
         self.c = self.c - lr * self.dc
         self.dc.fill(0.)
+"""
+
+
+
+
+#"""
+class DisplaceFC(object):
+    def __init__(self, I, H, name=None):
+        assert I == H # currently only support square ones
+        self.n = I
+        self.g = init_w([self.n, 1])
+        self.dg = np.zeros(self.g.shape)
+        self.h = init_w([self.n, 1])
+        self.dh = np.zeros(self.h.shape)
+        self.c = init_w([self.n, 1])
+        self.dc = np.zeros(self.c.shape)
+        tmp = np.arange(I) / float(I) 
+        self.B = np.diag( tmp )
+        self.coe = np.diag( 1. / (1. - tmp) ) # (I , aB^q)^{-1} 
+        self.name = name
+
+    def forward(self, x):
+        self.w = self.g.dot(self.h.T).dot(self.coe)
+        a = np.dot(x, self.w.T) + self.c.T # a = wx + c
+        if __debug__:
+            assert np.allclose(
+                self.g.dot(self.h.T),
+                self.w - self.w.dot(self.B)
+            )
+            print self.name, "forward", x.shape, "to", a.shape
+        return a
+
+    def backward(self, x, d_a):
+        self.dc = np.dot(d_a.T, np.ones([x.shape[0], 1]))
+        d_x = np.dot(d_a, self.w) # this is for next backpropagate layer
+
+        dw = np.dot(d_a.T, x)
+        self.dg = dw.dot(self.coe.T).dot(self.h)
+        self.dh = self.g.T.dot(dw).dot(self.coe).T
+        if __debug__:
+            print self.name, "backward", d_a.shape, "to", d_x.shape
+        return d_x
+
+    def update(self, lr=0.01):
+        self.g = self.g - lr * self.dg
+        self.dg.fill(0.)
+        self.h = self.h - lr * self.dh
+        self.dh.fill(0.)
+        self.c = self.c - lr * self.dc
+        self.dc.fill(0.)
+#"""
+
+
 
 
 
