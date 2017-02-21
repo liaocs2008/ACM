@@ -224,22 +224,24 @@ class BlockDisplaceFC(object):
         self.H = H
         def gcd(a, b): 
             return gcd(b, a % b) if b else a
-        if k is not None:
+        if k is None:
             self.k = gcd(self.I, self.H)
         else:
             self.k = k
+            self.I = ((I + k - 1) / k) * k
+            self.H = ((H + k - 1) / k) * k
+            self.desired_output = H
         assert self.I % self.k == 0 and self.H % self.k == 0
 
         self.B = [[DisplaceFC(self.k, self.k, 'tmp_%d_%d' % (i,j)) 
                     for j in xrange(self.H/self.k)] 
                     for i in xrange(self.I/self.k)]
         self.name = name
-        print "ATTENTION: You are using BlockDisplaceFC"
+        print "ATTENTION: You are using BlockDisplaceFC", I, H, self.k
 
     def forward(self, x):
-        assert self.I == x.shape[1]
-        tmp_x = np.zeros([(x.shape[0]/self.k)*self.k, 
-                          (x.shape[1]/self.k)*self.k])
+        tmp_x = np.zeros([((x.shape[0]+self.k-1)/self.k)*self.k, 
+                          ((x.shape[1]+self.k-1)/self.k)*self.k])
         tmp_x[:x.shape[0], :x.shape[1]] = x
         a = np.zeros([tmp_x.shape[0], self.H])
         for i in xrange(a.shape[0] / self.k): #B
@@ -249,14 +251,14 @@ class BlockDisplaceFC(object):
                     a[i*self.k:(i+1)*self.k, j*self.k:(j+1)*self.k] += self.B[k][j].forward(tmp_x[i*self.k:(i+1)*self.k, k*self.k:(k+1)*self.k])
         if __debug__:
             print self.name, "forward", x.shape, "to", a.shape
-        return a[:x.shape[0], :]
+        return a[:x.shape[0], :self.desired_output]
 
     def backward(self, x, d_a):
-        tmp_x = np.zeros([(x.shape[0]/self.k)*self.k, 
-                          (x.shape[1]/self.k)*self.k])
+        tmp_x = np.zeros([((x.shape[0]+self.k-1)/self.k)*self.k, 
+                          ((x.shape[1]+self.k-1)/self.k)*self.k])
         tmp_x[:x.shape[0], :x.shape[1]] = x
-        tmp_d_a = np.zeros([(d_a.shape[0]/self.k)*self.k,
-                            (d_a.shape[1]/self.k)*self.k])
+        tmp_d_a = np.zeros([((d_a.shape[0]+self.k-1)/self.k)*self.k,
+                            ((d_a.shape[1]+self.k-1)/self.k)*self.k])
         tmp_d_a[:d_a.shape[0], :d_a.shape[1]] = d_a
         d_x = np.zeros(tmp_x.shape)
         for k in xrange(self.I/self.k): #I
@@ -273,6 +275,7 @@ class BlockDisplaceFC(object):
         for bi in self.B:
             for bij in bi:
                 bij.update(lr)
+
 
  
 
@@ -1834,7 +1837,7 @@ def GradientChecking13():
     x = init_w([B, I])
     y = np.sin(x)
 
-    layers = [BlockDisplaceFC(I, H, "BlockDisplaceFC1"), LeakyReLU('leakyrelu0'), BlockDisplaceFC(H, O, "BlockDisplaceFC2")]
+    layers = [BlockDisplaceFC(I, H, 3, "BlockDisplaceFC1"), LeakyReLU('leakyrelu0'), BlockDisplaceFC(H, O, 3, "BlockDisplaceFC2")]
     nlayers = len(layers)
 
     # forward and backward
