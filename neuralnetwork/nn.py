@@ -277,6 +277,69 @@ class BlockDisplaceFC(object):
                 bij.update(lr)
 
 
+class DisplaceFC2(object):
+    def __init__(self, I, H, name=None):
+        assert I == H # currently only support square ones
+        self.I = I
+        self.H = H
+        self.n = np.max([I, H])
+        self.g = init_w([self.n, 1])
+        self.dg = np.zeros(self.g.shape)
+        self.h = init_w([self.n, 1])
+        self.dh = np.zeros(self.h.shape)
+        self.c = init_w([self.n, 1])
+        self.dc = np.zeros(self.c.shape)
+        tmp = np.arange(self.n) / float(self.n) 
+        self.B = np.diag( tmp )
+        self.coe = np.diag( 1. / (1. - tmp) ) # (I , aB^q)^{-1} 
+        self.name = name
+
+    def forward(self, x):
+        if x.shape[1] < self.n:
+            new_x = np.zeros([x.shape[0], self.n])
+            new_x[:x.shape[0], :x.shape[1]] = x
+        else:
+            new_x = x
+        self.w = self.g.dot(self.h.T).dot(self.coe)
+        a = np.dot(new_x, self.w.T) + self.c.T # a = wx + c
+        if __debug__:
+            assert np.allclose(
+                self.g.dot(self.h.T),
+                self.w - self.w.dot(self.B)
+            )
+            print self.name, "forward", x.shape, "to", a.shape
+        return a[:x.shape[0], :self.H]
+
+    def backward(self, x, d_a):
+        if d_a.shape[1] < self.n:
+            new_d_a = np.zeros([d_a.shape[0], self.n])
+            new_d_a[:d_a.shape[0],:d_a.shape[1]] = d_a
+        else:
+            new_d_a = d_a
+        # for accumulation in block-displace-fc
+        self.dc = np.dot(new_d_a.T, np.ones([x.shape[0], 1]))
+        d_x = np.dot(new_d_a, self.w) # this is for next backpropagate layer
+
+        if x.shape[1] < self.n:
+            new_x = np.zeros([x.shape[0], self.n])
+            new_x[:x.shape[0], :x.shape[1]] = x
+        else:
+            new_x = x
+        dw = np.dot(new_d_a.T, new_x)
+        self.dg = dw.dot(self.coe.T).dot(self.h)
+        self.dh = self.g.T.dot(dw).dot(self.coe).T
+        if __debug__:
+            print self.name, "backward", d_a.shape, "to", d_x.shape
+        return d_x[:x.shape[0], :x.shape[1]]
+
+    def update(self, lr=0.01):
+        self.g = self.g - lr * self.dg
+        self.dg.fill(0.)
+        self.h = self.h - lr * self.dh
+        self.dh.fill(0.)
+        self.c = self.c - lr * self.dc
+        self.dc.fill(0.)
+
  
 
 
@@ -1905,6 +1968,82 @@ def GradientChecking13():
 
 
 
+def GradientChecking14():
+    # this is to check fully connected layer
+    B = 8  # batch size
+    I = 8  # input size
+    H = 17
+    O = I   # output size
+
+    x = init_w([B, I])
+    y = np.sin(x)
+
+    layers = [DisplaceFC2(I, H, "DisplaceFC1"), LeakyReLU('leakyrelu0'), DisplaceFC2(H, O, "DisplaceFC2")]
+    nlayers = len(layers)
+
+    # forward and backward
+
+    # inputs[i] is the input for i-th layer
+    # the last of inputs[i] must be the output of current network
+    inputs = [x]
+    for i in xrange(nlayers):
+        inputs.append( layers[i].forward(inputs[-1]) ) # inputs[i] is the input for i-th layer
+
+    cost = EuclideanLoss()
+    # loss = cost.forward(inputs[-1], y)
+
+    # grads[i] is the gradients for i-th layer, but in the reverse order
+    grads = [cost.backward(inputs[-1], y)]
+    for i in reversed(xrange(nlayers)):
+        grads.append( layers[i].backward(inputs[i], grads[-1]) ) # grads[i]
+
+    # following checking method is from https://gist.github.com/karpathy/587454dc0146a6ae21fc
+    delta = 1e-5
+    rel_error_thr_warning = 1e-2
+    rel_error_thr_error = 1
+
+    checklist = [layers[0].g, layers[0].h, layers[0].c, layers[2].g, layers[2].h, layers[2].c]
+    grads_analytic = [layers[0].dg, layers[0].dh, layers[0].dc, layers[2].dg, layers[2].dh, layers[2].dc]
+    names = ['0g', '0h', '0c', '2g', '2h', '2c' ]
+    for j in xrange(len(checklist)):
+        mat = checklist[j]
+        dmat = grads_analytic[j]
+        name = names[j]
+        for i in xrange(mat.size):
+            old_val = mat.flat[i]
+
+            # test f(x + delta_x)
+            mat.flat[i] = old_val + delta
+            loss0 = fwd(x, y, layers, cost)
+
+            # test f(x - delta_x)
+            mat.flat[i] = old_val - delta
+            loss1 = fwd(x, y, layers, cost)
+
+            mat.flat[i] = old_val # recover
+
+            grad_analytic = dmat.flat[i]
+            grad_numerical = (loss0 - loss1) / (2 * delta)
+
+            if grad_numerical == 0 and grad_analytic == 0:
+                rel_error = 0 # both are zero, OK.
+                status = 'OK'
+            elif abs(grad_numerical) < 1e-7 and abs(grad_analytic) < 1e-7:
+                rel_error = 0 # not enough precision to check this
+                status = 'VAL SMALL WARNING'
+            else:
+                rel_error = abs(grad_analytic - grad_numerical) / abs(grad_numerical + grad_analytic)
+                status = 'OK'
+                if rel_error > rel_error_thr_warning: status = 'WARNING'
+                if rel_error > rel_error_thr_error: status = '!!!DANGEROUS ERROR!!!'
+
+            print '%s checking param %s index %s (val = %+8f), analytic = %+8f, numerical = %+8f, relative error = %+8f' \
+                    % (status, name, `np.unravel_index(i, mat.shape)`, old_val, grad_analytic, grad_numerical, rel_error)
+
+    print "Finish checking fully connected"
+
+
+
 
 
 
@@ -1922,6 +2061,7 @@ if __name__ == "__main__":
     #GradientChecking10()
     #GradientChecking11()
     #GradientChecking12()
-    GradientChecking13()
+    #GradientChecking13()
+    GradientChecking14()
     #time_test2()
     pass
