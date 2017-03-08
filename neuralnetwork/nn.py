@@ -591,6 +591,52 @@ class NewCircFC2(object):
 
 
 
+class NewCircFC3(object):
+    def __init__(self, I, H, k, name=None):
+        # I : input size
+        # H : hidden size
+        self.I = I
+        self.H = H
+        self.k = k
+        self.rows = (self.H + self.k - 1) / self.k
+        self.cols = (self.I + self.k - 1) / self.k
+        self.w = init_w([1, self.cols, self.rows, self.k])
+        self.mapping = np.roll(np.arange(self.k)[::-1], 1) # for shifting x
+        self.name = name
+        print "ATTENTION: You are using NewCircFC3"
+
+    def forward(self, x):
+        assert self.I == x.shape[1]
+        a = np.zeros((x.shape[0], self.k*self.rows))
+        new_x = np.pad(x, [(0,0), (0, self.k*self.cols-x.shape[1])], 'constant', constant_values=0)
+        new_x = new_x.reshape([x.shape[0], self.cols, 1, self.k]) 
+        a = np.sum(
+                np.fft.irfft(np.fft.rfft(new_x, n=self.k) * np.fft.rfft(self.w, n=self.k), n=self.k),
+                axis=1
+            ).reshape(a.shape)
+        if __debug__:
+            print self.name, "forward", x.shape, "to", a.shape
+        return a[:,:self.H]
+
+    def backward(self, x, d_a):
+        d_x = np.zeros([x.shape[0], self.k*self.cols])
+        new_x = np.pad(x, [(0, 0), (0, self.k * self.cols - x.shape[1])], 'constant', constant_values=0)
+        new_x = new_x.reshape([x.shape[0], self.cols, 1, self.k])[:, :, :, self.mapping]
+        new_d_a = np.pad(d_a, [(0,0), (0, self.k * self.rows -d_a.shape[1])], 'constant', constant_values=0)
+        new_d_a = new_d_a.reshape(x.shape[0], 1, self.rows, self.k)
+        self.dw = np.sum(np.fft.irfft(np.fft.rfft(new_x, n=self.k) * np.fft.rfft(new_d_a, n=self.k), n=self.k), axis=0)
+        d_x = np.sum(np.fft.irfft(np.fft.rfft(new_d_a, n=self.k) * np.fft.rfft(self.w[:,:,:,self.mapping], n=self.k), n=self.k), axis=2)
+        d_x = d_x.reshape([x.shape[0], self.k * self.cols])
+        if __debug__:
+            print self.name, "backward", d_a.shape, "to", d_x.shape
+        return d_x[:,:self.I]
+
+    def update(self, lr=0.01):
+        self.w = self.w - lr * self.dw
+        pass
+
+
+
 
 
 
@@ -2044,6 +2090,84 @@ def GradientChecking14():
 
 
 
+def GradientChecking15():
+    # this is to check fully connected layer
+    B = 3  # batch size
+    I = 7  # input size
+    H = 17
+    O = I   # output size
+
+    x = init_w([B, I])
+    y = np.sin(x)
+    #y = np.sum(np.sin(x), axis=1).reshape(B, O)
+
+    layers = [NewCircFC3(I, H, 5, "CircFc1"), Tanh('tanh0'), NewCircFC3(H, O, 4, "CircFc2")]
+    nlayers = len(layers)
+
+    # forward and backward
+
+    # inputs[i] is the input for i-th layer
+    # the last of inputs[i] must be the output of current network
+    inputs = [x]
+    for i in xrange(nlayers):
+        inputs.append( layers[i].forward(inputs[-1]) ) # inputs[i] is the input for i-th layer
+
+    cost = EuclideanLoss()
+    # loss = cost.forward(inputs[-1], y)
+
+    # grads[i] is the gradients for i-th layer, but in the reverse order
+    grads = [cost.backward(inputs[-1], y)]
+    for i in reversed(xrange(nlayers)):
+        grads.append( layers[i].backward(inputs[i], grads[-1]) ) # grads[i]
+
+    # following checking method is from https://gist.github.com/karpathy/587454dc0146a6ae21fc
+    delta = 1e-5
+    rel_error_thr_warning = 1e-2
+    rel_error_thr_error = 1
+
+    checklist = [layers[0].w, layers[2].w]
+    grads_analytic = [layers[0].dw, layers[2].dw]
+    names = ['w%d' % i for i in xrange(len(checklist))]
+    for j in xrange(len(checklist)):
+        mat = checklist[j]
+        dmat = grads_analytic[j]
+        name = names[j]
+        for i in xrange(mat.size):
+            old_val = mat.flat[i]
+
+            # test f(x + delta_x)
+            mat.flat[i] = old_val + delta
+            loss0 = fwd(x, y, layers, cost)
+
+            # test f(x - delta_x)
+            mat.flat[i] = old_val - delta
+            loss1 = fwd(x, y, layers, cost)
+
+            mat.flat[i] = old_val # recover
+
+            grad_analytic = dmat.flat[i]
+            grad_numerical = (loss0 - loss1) / (2 * delta)
+
+            if grad_numerical == 0 and grad_analytic == 0:
+                rel_error = 0 # both are zero, OK.
+                status = 'OK'
+            elif abs(grad_numerical) < 1e-7 and abs(grad_analytic) < 1e-7:
+                rel_error = 0 # not enough precision to check this
+                status = 'VAL SMALL WARNING'
+            else:
+                rel_error = abs(grad_analytic - grad_numerical) / abs(grad_numerical + grad_analytic)
+                status = 'OK'
+                if rel_error > rel_error_thr_warning: status = 'WARNING'
+                if rel_error > rel_error_thr_error: status = '!!!DANGEROUS ERROR!!!'
+
+            print '%s checking param %s index %s (val = %+8f), analytic = %+8f, numerical = %+8f, relative error = %+8f' \
+                    % (status, name, `np.unravel_index(i, mat.shape)`, old_val, grad_analytic, grad_numerical, rel_error)
+
+    print "Finish checking fully connected"
+
+
+
+
 
 
 
@@ -2062,6 +2186,7 @@ if __name__ == "__main__":
     #GradientChecking11()
     #GradientChecking12()
     #GradientChecking13()
-    GradientChecking14()
+    #GradientChecking14()
+    GradientChecking15()
     #time_test2()
     pass
