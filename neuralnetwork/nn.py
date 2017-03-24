@@ -876,32 +876,33 @@ class Conv(object):
 
 
 
-# class Pooling(object):
-#     def __init__(self, (iN, iC, iW, iH), k, name=None):
-#         # (batch_size, channels, width, height)
-#         # assume stride is 1
-#         # max pooling k by k
-#         self.k = k
-#         self.name = name
-#
-#         self.indx = np.arange(iN * iC * iW * iH).reshape(-1, iW, iH)
-#         self.indx = self.indx.reshape(-1, iW/self.k, self.k, iH/self.k, self.k)
-#         self.indx = np.swapaxes(self.indx, 2, 3)
-#         self.indx = self.indx(-1, self.k * self.k)
-#
-#     def forward(self, x):
-#         assert 4 == len(x.shape)
-#         new_x = x.ravel()
-#         self.maxindx = np.argmax(new_x[self.indx], axis=0)
-#         a = x[self.maxindx]
-#
-#     def backward(self, x, d_a):
-#         d_x = np.zeros(x.shape)
-#         d_x[self.maxindx][:] = d_a.ravel()[:]
-#         return d_x
-#
-#     def update(selfself, lr=0.01):
-#         pass
+class Pooling(object):
+    def __init__(self, (iN, iC, iW, iH), k, name=None):
+        # (batch_size, channels, width, height)
+        # assume stride is 1
+        # max pooling k by k
+        self.k = k
+        self.name = name
+
+        self.indx = np.arange(iN * iC * iW * iH).reshape(-1, iW, iH)
+        self.indx = self.indx.reshape(-1, iW/self.k, self.k, iH/self.k, self.k)
+        self.indx = np.swapaxes(self.indx, 2, 3)
+        self.indx = self.indx.reshape(-1, self.k * self.k)
+
+    def forward(self, x):
+        assert 4 == len(x.shape)
+        new_x = x.ravel()
+        self.maxindx = np.argmax(new_x[self.indx], axis=0)
+        a = x[self.maxindx]
+        return a
+
+    def backward(self, x, d_a):
+        d_x = np.zeros(x.shape)
+        d_x[self.maxindx][:] = d_a.ravel()[:]
+        return d_x
+
+    def update(selfself, lr=0.01):
+        pass
 
 
 
