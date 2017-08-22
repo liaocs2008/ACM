@@ -1005,8 +1005,58 @@ class LeakyReLU(object):
 
 
 
+class EmbeddingLayer(object):                                                      
+    def __init__(self, M, H, name=None):                                           
+        self.w = init_w([M, H])                                                    
+        self.dw = np.zeros(self.w.shape)                                           
+        self.name = name                                                           
+                                                                                   
+    def forward(self, x):                                                          
+        a = self.w[x]                                                              
+        if __debug__:                                                              
+            print self.name, "forward", x.shape, "to", a.shape                     
+        return a                                                                   
+                                                                                   
+    def backward(self, x, d_a):                                                    
+        d_a = d_a.reshape([-1, d_a.shape[-1]]) #(-1, H)                            
+        for i, v in enumerate(x.ravel()):                                          
+            self.dw[v] += d_a[i]                                                   
+        if __debug__:                                                              
+            print self.name, "backward", d_a.shape, "to None"                      
+        return None                                                                
+                                                                                   
+    def update(self, lr=0.01):                                                     
+        self.w = self.w - lr * self.dw                                             
+        self.dw.fill(0.) 
+
     
-    
+   
+	
+class ReduceMeanLayer(object):                                                     
+                                                                                   
+    def __init__(self, axis, name=None):                                           
+        self.name = name                                                           
+        self.axis = axis                                                           
+                                                                                   
+    def forward(self, x):                                                          
+        a = np.mean(x, self.axis)                                                  
+        if __debug__:                                                              
+            print self.name, "forward", x.shape, "to", a.shape                     
+        return a                                                                
+                                                                                
+    def backward(self, x, d_a):                                                 
+        s = list(d_a.shape)                                                     
+        s.insert(self.axis, 1)                                                  
+        d_a = d_a.reshape(s) / x.shape[self.axis]                               
+        d_x = np.repeat(d_a, x.shape[self.axis], self.axis)                     
+        if __debug__:                                                           
+            print self.name, "backward", d_a.shape, "to", x.shape               
+        return d_x                                                              
+                                                                                
+    def update(self, lr=0.01):                                                  
+        pass 
+	
+	
     
 
 class EuclideanLoss(object):
@@ -2170,6 +2220,80 @@ def GradientChecking15():
 
 
 
+def GradientChecking16():                                                       
+    # this is to just check network can go both forward and backward            
+    B = 3  # batch size                                                         
+    I = 5  # input size                                                         
+    H = 11 # hidden size                                                        
+    O = 11   # output size                                                      
+                                                                                
+    x = np.random.randint(0, I, size=(B,I))                                     
+    y = np.random.random([B,O])                                                 
+                                                                                
+    layers = [EmbeddingLayer(I,H), ReduceMeanLayer(1, "reduce")]                
+    nlayers = len(layers)                                                       
+                                                                                
+    # forward and backward                                                      
+                                                                                
+    # inputs[i] is the input for i-th layer                                     
+    # the last of inputs[i] must be the output of current network               
+    inputs = [x]                                                                
+    for i in xrange(nlayers):                                                   
+        inputs.append( layers[i].forward(inputs[-1]) ) # inputs[i] is the input for i-th layer
+                                                                                
+    cost = EuclideanLoss()                                                      
+    loss = cost.forward(inputs[-1], y)                                          
+                                                                                
+    # grads[i] is the gradients for i-th layer, but in the reverse order        
+    grads = [cost.backward(inputs[-1], y)]                                      
+    for i in reversed(xrange(nlayers)):                                         
+        grads.append( layers[i].backward(inputs[i], grads[-1]) ) # grads[i]
+
+    # following checking method is from https://gist.github.com/karpathy/587454dc0146a6ae21fc
+    delta = 1e-5                                                                
+    rel_error_thr_warning = 1e-2                                                
+    rel_error_thr_error = 1                                                     
+                                                                                
+    checklist = [layers[0].w]                                                   
+    grads_analytic = [layers[0].dw]                                             
+    names = ['w']                                                               
+    for j in xrange(len(checklist)):                                            
+        mat = checklist[j]                                                      
+        dmat = grads_analytic[j]                                                
+        name = names[j]                                                         
+        for i in xrange(mat.size):                                              
+            old_val = mat.flat[i]                                               
+                                                                                
+            # test f(x + delta_x)                                               
+            mat.flat[i] = old_val + delta                                       
+            loss0 = fwd(x, y, layers, cost)                                     
+                                                                                
+            # test f(x - delta_x)                                               
+            mat.flat[i] = old_val - delta                                       
+            loss1 = fwd(x, y, layers, cost)                                     
+                                                                                
+            mat.flat[i] = old_val # recover                                     
+                                                                                
+            grad_analytic = dmat.flat[i]                                        
+            grad_numerical = (loss0 - loss1) / (2 * delta)                      
+                                                                                
+            if grad_numerical == 0 and grad_analytic == 0:                      
+                rel_error = 0 # both are zero, OK.                              
+                status = 'OK'                                                   
+            elif abs(grad_numerical) < 1e-7 and abs(grad_analytic) < 1e-7:      
+                rel_error = 0 # not enough precision to check this              
+                status = 'VAL SMALL WARNING'                                    
+            else:                                                               
+                rel_error = abs(grad_analytic - grad_numerical) / abs(grad_numerical + grad_analytic)
+                status = 'OK'                                                   
+                if rel_error > rel_error_thr_warning: status = 'WARNING'        
+                if rel_error > rel_error_thr_error: status = '!!!DANGEROUS ERROR!!!'
+                                                                                
+            print '%s checking param %s index %s (val = %+8f), analytic = %+8f, numerical = %+8f, relative error = %+8f' \
+                    % (status, name, `np.unravel_index(i, mat.shape)`, old_val, grad_analytic, grad_numerical, rel_error)
+
+
+
 
 
 if __name__ == "__main__":
@@ -2188,6 +2312,7 @@ if __name__ == "__main__":
     #GradientChecking12()
     #GradientChecking13()
     #GradientChecking14()
-    GradientChecking15()
+    #GradientChecking15()
+    GradientChecking16()
     #time_test2()
     pass
