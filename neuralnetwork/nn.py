@@ -1098,6 +1098,84 @@ class SoftmaxCrossEntropyLoss(object):
         return d_b
 
 
+class HuffmanNode(object):                                                      
+    def __init__(self, left=None, right=None, idx=None):                        
+        self.left = left                                                        
+        self.right = right                                                      
+        self.idx = idx                                                          
+    def children(self):                                                         
+        return((self.left, self.right))                                         
+                                                                                
+def create_tree(frequencies):                                                   
+    p = queue.PriorityQueue()                                                   
+    cnt = 0                                                                     
+    for k,v in frequencies.items():# 1. Create a leaf node for each symbol      
+        p.put((v,k,cnt))               #    and add it to the priority queue    
+        cnt+=1                                                                  
+    while p.qsize() > 1:           # 2. While there is more than one node       
+        l, r = p.get(), p.get()    # 2a. remove two highest nodes               
+        node = HuffmanNode(l, r, cnt)   # 2b. create internal node with children
+        p.put((l[0]+r[0], node))   # 2c. add new node to queue                  
+        cnt += 1                                                                
+    return p.get()                 # 3. tree is complete - return root node     
+                                                                                
+def walk_tree(node, prefix="", code={}, prepath=[], path={}):                   
+    if isinstance(node[1].left[1], HuffmanNode):                                
+        walk_tree(node[1].left,prefix+"0", code, prepath+[node[1].idx])         
+    else:                                                                       
+        code[node[1].left[1]]=prefix+"0"                                        
+        path[node[1].left[1]]=prepath+[node[1].left[2]]                         
+    if isinstance(node[1].right[1],HuffmanNode):                                
+        walk_tree(node[1].right,prefix+"1", code, prepath+[node[1].idx])        
+    else:                                                                       
+        code[node[1].right[1]]=prefix+"1"                                       
+        path[node[1].right[1]]=prepath+[node[1].right[2]]                       
+    return(code, path)                                                          
+                                                                                
+def encode(freq):                                                               
+    root = create_tree(freq)                                                    
+    code, path = walk_tree(root)                                                
+    return [(x, code.get(x, 0), path.get(x, 0)) for x in set(code).union(path)], rootmmnnnnnnnnnnnnnmmnnnnnmmmmmmmmmmmmmmmmmmmnnnn
+
+
+class HierarchicalSoftmaxLoss(object):                                             
+    def __init__(self, H, O, root, path, code, name=None):                         
+        self.name = name                                                           
+        self.w = init_w([np.max(np.max(path))+1, H])                               
+        self.dw = np.zeros(self.w.shape)                                           
+        self.root = root                                                           
+        self.path = path                                                           
+        self.code = code                                                           
+                                                                                   
+    def forward(self, h, y):                                                       
+        loss = 0                                                                   
+        for idx, i in enumerate(y):                                                
+            path = self.path[i]                                                    
+            vecs = self.w[path]                                                    
+            tmp  = np.dot(vecs, h[idx])                                            
+            prob = sigmoid(tmp)                                                    
+            code = np.array(self.code[i])                                          
+            loss += np.sum(code * np.log(prob) + (1-code) * np.log(1-prob))        
+        return loss                                                                
+                                                                                   
+    def backward(self, h, y):                                                      
+        loss = 0                                                                   
+        d_h = np.zeros(h.shape) # (B, H)                                           
+        for idx, i in enumerate(y):                                                
+            path = self.path[i]                                                    
+            vecs = self.w[path] #(L, H)                                            
+            tmp  = np.dot(vecs, h[idx]).reshape([-1,1]) #(L, 1)                    
+            prob = sigmoid(tmp) #(L, 1)                                            
+            code = np.array(self.code[i]).reshape([-1,1]) # (L, 1)                 
+            self.dw[path] += (code-prob) * h[idx] #(L, H)                          
+            d_h[idx] += np.sum((prob-code) * vecs, axis=0)                         
+        return d_h                                                                 
+                                                                                   
+    def update(self, lr=0.01):                                                     
+        self.w = self.w - lr * self.dw                                             
+        self.dw.fill(0.) 
+
+
 
 def GradientChecking1():
     # this is to just check network can go both forward and backward
@@ -2221,16 +2299,36 @@ def GradientChecking15():
 
 
 def GradientChecking16():                                                       
+                                                                                
+    txt = "this is an example for huffman encoding"                             
+    symb2freq = defaultdict(int)                                                
+    for ch in txt:                                                              
+        symb2freq[ch] += 1                                                      
+    tree, root = encode(symb2freq)                                              
+    labels = np.unique(list(txt))                                               
+    print "labels", len(labels)                                                 
+    tree_idx = {}                                                               
+    for i,xs in enumerate(tree):                                                
+        tree_idx[xs[0]] = i                                                     
+                                                                                
+    path = []                                                                   
+    for label in labels:                                                        
+        path.append(tree[tree_idx[label]][2])                                   
+                                                                                
+    code = []                                                                   
+    for label in labels:                                                        
+        code.append(map(int, list(tree[tree_idx[label]][1])))                   
+                                                                                
     # this is to just check network can go both forward and backward            
     B = 3  # batch size                                                         
     I = 5  # input size                                                         
     H = 11 # hidden size                                                        
-    O = 11   # output size                                                      
+    O = len(labels)  # output size                                              
                                                                                 
     x = np.random.randint(0, I, size=(B,I))                                     
-    y = np.random.random([B,O])                                                 
+    y = np.random.randint(0, O, size=[B])                                       
                                                                                 
-    layers = [EmbeddingLayer(I,H), ReduceMeanLayer(1, "reduce")]                
+    layers = [EmbeddingLayer(I,H), ReduceMeanLayer(1, "reduce") ]               
     nlayers = len(layers)                                                       
                                                                                 
     # forward and backward                                                      
@@ -2241,22 +2339,22 @@ def GradientChecking16():
     for i in xrange(nlayers):                                                   
         inputs.append( layers[i].forward(inputs[-1]) ) # inputs[i] is the input for i-th layer
                                                                                 
-    cost = EuclideanLoss()                                                      
+    cost = HierarchicalSoftmaxLoss(H, O, root, path, code)                      
     loss = cost.forward(inputs[-1], y)                                          
                                                                                 
     # grads[i] is the gradients for i-th layer, but in the reverse order        
     grads = [cost.backward(inputs[-1], y)]                                      
     for i in reversed(xrange(nlayers)):                                         
-        grads.append( layers[i].backward(inputs[i], grads[-1]) ) # grads[i]
+        grads.append( layers[i].backward(inputs[i], grads[-1]) ) # grads[i] 
 
     # following checking method is from https://gist.github.com/karpathy/587454dc0146a6ae21fc
     delta = 1e-5                                                                
     rel_error_thr_warning = 1e-2                                                
     rel_error_thr_error = 1                                                     
                                                                                 
-    checklist = [layers[0].w]                                                   
-    grads_analytic = [layers[0].dw]                                             
-    names = ['w']                                                               
+    checklist = [layers[0].w, cost.w]                                           
+    grads_analytic = [layers[0].dw, cost.dw]                                    
+    names = ['w', 'cost_w']                                                     
     for j in xrange(len(checklist)):                                            
         mat = checklist[j]                                                      
         dmat = grads_analytic[j]                                                
@@ -2291,7 +2389,6 @@ def GradientChecking16():
                                                                                 
             print '%s checking param %s index %s (val = %+8f), analytic = %+8f, numerical = %+8f, relative error = %+8f' \
                     % (status, name, `np.unravel_index(i, mat.shape)`, old_val, grad_analytic, grad_numerical, rel_error)
-
 
 
 
